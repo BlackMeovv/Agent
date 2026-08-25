@@ -207,6 +207,9 @@ def create_app(agent: InsightAgent | None = None, settings: Settings | None = No
                 REQUESTS.labels(status=cached.get("status", "ok")).inc()
                 cached_payload = dict(cached)
                 cached_payload["cached"] = True
+                # 如实报告本次请求的消耗：命中缓存 = 零模型调用、零成本
+                cached_payload["usage"] = {"llm_calls": 0, "total_tokens": 0, "cost": 0.0}
+                cached_payload["latency_ms"] = int((time.monotonic() - start) * 1000)
                 yield _sse("final", cached_payload)
                 return
             outcome: RunOutcome | None = None
@@ -291,7 +294,8 @@ PAGE = """<!DOCTYPE html>
     background: var(--panel); border-bottom: 1px solid var(--border);
     position: sticky; top: 0; z-index: 10;
   }
-  .brand { font-size: 14px; font-weight: 600; }
+  .brand { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .brand::before { content: ""; width: 10px; height: 10px; background: var(--accent); border-radius: 2px; }
   .brand span { color: var(--accent); }
   .brand .sub { color: var(--muted); font-weight: 400; font-size: 12px; }
   .topbar .env {
@@ -353,12 +357,13 @@ PAGE = """<!DOCTYPE html>
   .side-empty { color: var(--muted); font-size: 12px; }
 
   /* 中栏 */
-  .main { flex: 1; min-width: 0; padding: 14px 16px; }
+  .main { flex: 1; min-width: 0; display: flex; justify-content: center; }
+  .maincol { width: 100%; max-width: 940px; min-width: 0; padding: 16px 20px; }
 
   .querybox { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; }
-  .querybox .row { display: flex; gap: 8px; padding: 10px; }
+  .querybox .row { display: flex; gap: 8px; padding: 12px; }
   #q {
-    flex: 1; padding: 7px 10px; font-size: 13px; color: var(--text); background: var(--bg);
+    flex: 1; padding: 8px 12px; font-size: 13.5px; color: var(--text); background: var(--bg);
     border: 1px solid var(--border-strong); border-radius: 2px; outline: none;
   }
   #q:focus { border-color: var(--accent); }
@@ -375,14 +380,15 @@ PAGE = """<!DOCTYPE html>
   .samples a { color: var(--muted); text-decoration: none; margin-right: 14px; cursor: pointer; }
   .samples a:hover { color: var(--accent); text-decoration: underline; }
 
-  section.block { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; margin-top: 12px; }
+  section.block { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; margin-top: 14px; overflow: hidden; }
   .block-head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 7px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600;
+    background: var(--log-bg); border-radius: 3px 3px 0 0; letter-spacing: .02em;
   }
   .block-head .sub { color: var(--muted); font-weight: 400; }
   pre.sql {
-    padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.7;
+    padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.7; background: var(--log-bg);
     font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   .ghost {
@@ -400,9 +406,10 @@ PAGE = """<!DOCTYPE html>
     font-variant-numeric: tabular-nums; }
   td.num, th.num { text-align: right; font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
   td.idx { color: var(--muted); font-size: 11px; text-align: right; width: 1%; }
-  tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg) 50%, transparent); }
+  tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
   td i { color: var(--muted); }
-  .answer { padding: 10px 12px; white-space: pre-wrap; }
+  .answer { padding: 11px 14px; white-space: pre-wrap; font-size: 13.5px; border-left: 2px solid var(--ok); }
   #chartimg { display: block; max-width: 100%; padding: 10px 12px; }
 
   /* 右栏：运行过程 */
@@ -424,8 +431,8 @@ PAGE = """<!DOCTYPE html>
   .tlabel { font-size: 12.5px; }
   .task.bad .tlabel { color: var(--err); }
   .tthought {
-    font-size: 12px; color: var(--muted); margin-top: 2px; padding-left: 8px;
-    border-left: 2px solid var(--border);
+    font-size: 12px; color: var(--muted); margin-top: 3px; padding: 4px 8px;
+    background: var(--log-bg); border-left: 2px solid var(--border-strong); border-radius: 0 2px 2px 0;
   }
   .terr { font-size: 12px; color: var(--err); margin-top: 2px; }
   .spinner {
@@ -447,6 +454,12 @@ PAGE = """<!DOCTYPE html>
   #runstats b { color: var(--text); font-weight: 500; }
   #runstats .flag-warn { color: var(--warn); }
   .run-empty { color: var(--muted); font-size: 12px; }
+  .sidebar::-webkit-scrollbar, .runpanel::-webkit-scrollbar, .tblwrap::-webkit-scrollbar,
+  pre.sql::-webkit-scrollbar { width: 8px; height: 8px; }
+  .sidebar::-webkit-scrollbar-thumb, .runpanel::-webkit-scrollbar-thumb,
+  .tblwrap::-webkit-scrollbar-thumb, pre.sql::-webkit-scrollbar-thumb {
+    background: var(--border-strong); border-radius: 4px;
+  }
   .hidden { display: none !important; }
   @media (max-width: 1180px) { .sidebar { display: none; } }
   @media (max-width: 860px) { .runpanel { display: none; } }
@@ -481,7 +494,7 @@ PAGE = """<!DOCTYPE html>
     </div>
   </aside>
 
-  <div class="main">
+  <div class="main"><div class="maincol">
     <div class="querybox">
       <div class="row">
         <input id="q" placeholder="输入业务问题，例如：支付总金额最高的前3个城市是哪几个？" autocomplete="off">
@@ -491,6 +504,15 @@ PAGE = """<!DOCTYPE html>
       </div>
       <div class="samples" id="samples">示例：</div>
     </div>
+
+    <section class="block" id="welcome">
+      <div class="block-head">开始之前</div>
+      <div class="answer" style="border-left:2px solid var(--accent); color: var(--muted); font-size: 13px">
+        用自然语言查询左侧的数据库。系统会检索相关表结构、生成 SQL、在只读守卫下执行，
+        失败会自动修复；回答里的每个数字都经过与查询结果的比对校验。
+        右侧面板会实时展示每一步的执行过程与模型思路。
+      </div>
+    </section>
 
     <section class="block hidden" id="sqlblock">
       <div class="block-head"><span>SQL <span class="sub" id="sqlnote"></span></span><button class="ghost" id="copy">复制</button></div>
@@ -514,7 +536,7 @@ PAGE = """<!DOCTYPE html>
       <div class="block-head">图表</div>
       <img id="chartimg" alt="chart">
     </section>
-  </div>
+  </div></div>
 
   <aside class="runpanel">
     <div class="run-sec">
@@ -704,7 +726,7 @@ function run() {
   const q = $("q").value.trim();
   if (!q) return;
   if (es) es.close();
-  ["sqlblock", "datablock", "ansblock", "chartblock", "attsec", "statsec"].forEach(id => $(id).classList.add("hidden"));
+  ["welcome", "sqlblock", "datablock", "ansblock", "chartblock", "attsec", "statsec"].forEach(id => $(id).classList.add("hidden"));
   $("tasks").innerHTML = "";
   running(true);
   pushHistory(q, $("chart").checked);
@@ -782,6 +804,7 @@ function run() {
 }
 
 const params = new URLSearchParams(location.search);
+if (params.get("theme")) applyTheme(params.get("theme"));
 if (params.get("q")) { $("q").value = params.get("q"); if (params.get("chart") === "1") $("chart").checked = true; run(); }
 </script>
 </body>
