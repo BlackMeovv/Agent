@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # 服务
     server_host: str = "0.0.0.0"
     server_port: int = 8000
+    # 前端联调 CORS：逗号分隔的允许来源（如 http://localhost:5173）；留空则关闭
+    cors_allow_origins: str = ""
     # 结果缓存：redis://host:6379/0；不配置则用进程内 LRU
     redis_url: str = ""
     cache_ttl_seconds: int = 600

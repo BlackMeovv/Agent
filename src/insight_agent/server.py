@@ -113,6 +113,15 @@ def create_app(agent: InsightAgent | None = None, settings: Settings | None = No
     settings = settings or get_settings()
     cache: BaseCache = build_cache(settings)
     app = FastAPI(title="insight-agent", docs_url=None, redoc_url=None)
+    if settings.cors_allow_origins:  # 独立前端（如 Vue3 dev server）联调用
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()],
+            allow_methods=["GET", "POST", "DELETE"],
+            allow_headers=["Content-Type"],
+        )
     state = {"agent": agent}
 
     def get_agent() -> InsightAgent:
