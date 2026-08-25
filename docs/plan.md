@@ -58,12 +58,12 @@ flowchart TB
 
 - **语言/环境**：Python 3.12 + uv
 - **编排**：LangGraph（生产采用最广，JD 点名最多）
-- **模型**：OpenAI 兼容接口可切换——建议主用 DeepSeek-V3 / Qwen（便宜 + 国内叙事好），对照实验可加一个强模型
+- **模型**：OpenAI 兼容接口可切换——建议主用 DeepSeek-V3 / Qwen（便宜 + 国内叙事好），对照实验可加一个强模型；可选加分：Ollama/vLLM 本地部署一个 Qwen 小模型作为模型路由的廉价端，顺带覆盖"推理部署"考点
 - **SQL**：SQLite 起步（BIRD/Spider 就是 SQLite），进阶加 Docker 版 MySQL/Postgres 展示方言适配（sqlglot transpile）
-- **检索**：Chroma（向量，bge-m3 embedding）+ rank_bm25（稀疏），混合融合
+- **检索**：Chroma（向量，bge-m3 embedding）+ rank_bm25（稀疏），混合融合，可加 bge-reranker 重排；生产化升级可换 Milvus（JD 高频关键词）
 - **安全**：sqlglot（AST 校验）、Docker 沙箱（图表代码执行）
-- **可观测**：Langfuse（self-host，docker compose 一键起）或 Arize Phoenix；token/成本记账
-- **服务**：FastAPI + SSE 流式输出（支持中断）
+- **可观测**：Langfuse（self-host，docker compose 一键起）或 Arize Phoenix；token/成本记账；Prometheus + Grafana 系统指标大盘（QPS/延迟/错误率/缓存命中率）；structlog JSON 结构化日志
+- **服务**：FastAPI + SSE 流式输出（支持中断）；Redis 缓存（LLM 响应/embedding）；locust 并发压测出 QPS 与 P95/P99 数字
 - **评测**：BIRD dev 子集 + Spider dev + 自建业务评测集；pytest + GitHub Actions 回归 CI
 - **部署**：docker compose 一键起全套（服务 + Langfuse + 沙箱镜像 + 示例库）
 
@@ -120,7 +120,8 @@ flowchart TB
 - 数据库访问 MCP server 化；跨会话 Memory（用户口径偏好）
 - 自建业务库 + 200+ 条业务评测集（dev/held-out 划分）+ 数据投毒安全用例
 - 模型路由、prompt caching 与上下文分层（长会话下近期步骤全文/中期摘要/远期一行引用），把成本数字做漂亮
-- 多模型横评（2-3 个模型一张表）
+- Redis 缓存 + 异步改造 + locust 压测（报 QPS 与 P95 延迟前后对比）+ Prometheus/Grafana 指标大盘
+- 多模型横评（2-3 个模型一张表）；可选：Ollama/vLLM 本地小模型作路由廉价端
 - 英文 README + 一篇技术博客（badcase 复盘或消融实验），发牛客/掘金/知乎
 
 ## 七、简历写法模板（业务痛点 → 技术方案 → 量化结果）
@@ -133,7 +134,7 @@ flowchart TB
 - 建立**评测闭环**：200+ 条自建业务评测集（dev/held-out 划分）+ GitHub Actions 回归 CI + bad case 分类复盘；准确率数字报 **n=3 次重复 + Wilson 95% 置信区间**，held-out 复核 __%；完成 3 模型横评（成本-准确率权衡）
 - 实现**结论防幻觉校验**（归纳结论逐数字与查询结果精确比对，编造数字率 __%）；手写 Reason-Act-Observe 内循环，带重复动作检测与 token/金额预算熔断；含数据投毒（间接 Prompt Injection）安全评测用例
 - **Langfuse 全链路追踪**与 token 成本记账，经模型路由与 prompt caching 优化单次查询成本降至 $0.00X
-- 基于 **FastAPI + SSE** 实现流式输出与中断；docker compose 一键部署；将数据库访问封装为自研 **MCP Server**
+- 基于 **FastAPI + SSE** 实现流式输出与中断，Redis 缓存 + 异步改造后压测 QPS __、P95 延迟 __ms；docker compose 一键部署（含 Prometheus/Grafana 监控大盘）；将数据库访问封装为自研 **MCP Server**
 
 ## 八、面试追问预案（做项目时顺手留证据）
 
