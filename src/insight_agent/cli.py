@@ -74,10 +74,10 @@ def _cmd_ask(args: argparse.Namespace) -> int:
 
 
 def _cmd_schema(args: argparse.Namespace) -> int:
-    from .tools.database import ReadOnlyDatabase
+    from .tools.engines import open_database
 
     settings = _override_db(args)
-    db = ReadOnlyDatabase(settings.db_path)
+    db = open_database(settings.db_path)
     console.print(db.schema_text())
     return 0
 
@@ -136,7 +136,11 @@ def main() -> None:
     ask.add_argument("--no-answer", action="store_true", help="跳过总结节点（只要 SQL 和数据）")
     ask.add_argument("--chart", action="store_true", help="生成图表（模型写代码 → 沙箱执行）")
     ask.add_argument("--user", default="default", help="用户标识（跨会话记忆按用户隔离）")
-    ask.add_argument("--db", default=None, help="连接任意 SQLite 库文件（默认 .env 的 DB_PATH）")
+    ask.add_argument(
+        "--db",
+        default=None,
+        help="连接任意库：SQLite 文件路径，或 mysql:// / postgres:// 连接串（默认 .env 的 DB_PATH）",
+    )
     ask.set_defaults(func=_cmd_ask)
 
     schema = sub.add_parser("schema", help="查看喂给模型的 schema 上下文")

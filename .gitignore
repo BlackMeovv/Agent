@@ -12,7 +12,10 @@ build/
 
 # data & artifacts (generated)
 data/demo/*.sqlite
+data/charts/
+data/memory.sqlite
 eval/results/
+docker/dbs/*/10-data.sql
 *.log
 
 # editors

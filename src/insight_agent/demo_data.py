@@ -155,9 +155,144 @@ def build(db_path: str | Path = DEFAULT_PATH) -> Path:
     return path
 
 
-if __name__ == "__main__":
-    import sys
+# ---------- MySQL / PostgreSQL 演示库导出 ----------
 
-    target = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PATH
-    out = build(target)
-    print(f"演示库已生成: {out}")
+_DDL_MYSQL = """
+CREATE TABLE customers (
+    id INT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL COMMENT '客户姓名',
+    city VARCHAR(32) NOT NULL COMMENT '所在城市',
+    signup_date DATE NOT NULL COMMENT '注册日期',
+    vip_level INT NOT NULL DEFAULT 0 COMMENT '会员等级: 0 普通, 1 银卡, 2 金卡, 3 钻石'
+) COMMENT='客户表：客户姓名、所在城市、注册日期、会员等级';
+CREATE TABLE categories (
+    id INT PRIMARY KEY,
+    name VARCHAR(32) NOT NULL COMMENT '品类名称'
+) COMMENT='商品品类表';
+CREATE TABLE products (
+    id INT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL COMMENT '商品名称',
+    category_id INT NOT NULL COMMENT '所属品类',
+    price DECIMAL(10,2) NOT NULL COMMENT '售价（目录价）',
+    cost DECIMAL(10,2) NOT NULL COMMENT '成本'
+) COMMENT='商品表：所属品类、售价、成本';
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    customer_id INT NOT NULL COMMENT '下单客户',
+    order_date DATE NOT NULL COMMENT '下单日期',
+    status VARCHAR(16) NOT NULL COMMENT '订单状态: completed / shipped / pending / cancelled'
+) COMMENT='订单表：下单客户、下单日期、订单状态';
+CREATE TABLE order_items (
+    id INT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL COMMENT '购买数量',
+    unit_price DECIMAL(10,2) NOT NULL COMMENT '成交单价（可能有折扣，不等于 products.price）'
+) COMMENT='订单明细表：每单购买的商品、数量与成交单价';
+CREATE TABLE payments (
+    id INT PRIMARY KEY,
+    order_id INT NOT NULL,
+    amount DECIMAL(12,2) NOT NULL COMMENT '支付金额',
+    method VARCHAR(16) NOT NULL COMMENT '支付方式: alipay / wechat / card',
+    paid_at DATE NOT NULL COMMENT '支付日期'
+) COMMENT='支付流水表：支付金额、支付方式、支付时间';
+"""
+
+_DDL_POSTGRES = """
+CREATE TABLE customers (
+    id INT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    city VARCHAR(32) NOT NULL,
+    signup_date DATE NOT NULL,
+    vip_level INT NOT NULL DEFAULT 0
+);
+COMMENT ON TABLE customers IS '客户表：客户姓名、所在城市、注册日期、会员等级';
+COMMENT ON COLUMN customers.city IS '所在城市';
+COMMENT ON COLUMN customers.vip_level IS '会员等级: 0 普通, 1 银卡, 2 金卡, 3 钻石';
+CREATE TABLE categories (id INT PRIMARY KEY, name VARCHAR(32) NOT NULL);
+COMMENT ON TABLE categories IS '商品品类表';
+CREATE TABLE products (
+    id INT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    category_id INT NOT NULL,
+    price NUMERIC(10,2) NOT NULL,
+    cost NUMERIC(10,2) NOT NULL
+);
+COMMENT ON TABLE products IS '商品表：所属品类、售价（目录价）、成本';
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    order_date DATE NOT NULL,
+    status VARCHAR(16) NOT NULL
+);
+COMMENT ON TABLE orders IS '订单表：下单客户、下单日期、订单状态';
+COMMENT ON COLUMN orders.status IS '订单状态: completed / shipped / pending / cancelled';
+CREATE TABLE order_items (
+    id INT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    unit_price NUMERIC(10,2) NOT NULL
+);
+COMMENT ON TABLE order_items IS '订单明细表：每单购买的商品、数量与成交单价';
+COMMENT ON COLUMN order_items.unit_price IS '成交单价（可能有折扣，不等于 products.price）';
+CREATE TABLE payments (
+    id INT PRIMARY KEY,
+    order_id INT NOT NULL,
+    amount NUMERIC(12,2) NOT NULL,
+    method VARCHAR(16) NOT NULL,
+    paid_at DATE NOT NULL
+);
+COMMENT ON TABLE payments IS '支付流水表：支付金额、支付方式、支付时间';
+COMMENT ON COLUMN payments.method IS '支付方式: alipay / wechat / card';
+"""
+
+
+def dump_sql(dialect: str) -> str:
+    """导出演示库为 MySQL/PostgreSQL 初始化脚本（DDL 带注释 + 全量数据）。"""
+    import sqlite3
+    import tempfile
+
+    if dialect not in ("mysql", "postgres"):
+        raise ValueError(f"不支持的方言: {dialect}（mysql / postgres）")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db_file = Path(tmp) / "demo.sqlite"
+        build(db_file)
+        conn = sqlite3.connect(db_file)
+        try:
+            lines = ["-- insight-agent 演示库（确定性生成，seed=42）", ""]
+            lines.append(_DDL_MYSQL if dialect == "mysql" else _DDL_POSTGRES)
+            for table in ("categories", "customers", "products", "orders", "order_items", "payments"):
+                rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+                for start in range(0, len(rows), 500):
+                    chunk = rows[start : start + 500]
+                    values = ",\n".join(
+                        "(" + ", ".join(_sql_literal(v) for v in row) + ")" for row in chunk
+                    )
+                    lines.append(f"INSERT INTO {table} VALUES\n{values};")
+            return "\n".join(lines) + "\n"
+        finally:
+            conn.close()
+
+
+def _sql_literal(value) -> str:
+    if value is None:
+        return "NULL"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="演示库生成/导出")
+    parser.add_argument("target", nargs="?", default=str(DEFAULT_PATH))
+    parser.add_argument("--dump", choices=["mysql", "postgres"], help="导出为该方言的初始化 SQL（打印到 stdout）")
+    args = parser.parse_args()
+    if args.dump:
+        print(dump_sql(args.dump))
+    else:
+        out = build(args.target)
+        print(f"演示库已生成: {out}")

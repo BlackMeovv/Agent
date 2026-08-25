@@ -30,7 +30,6 @@ from ..llm import BaseLLM, LLMError
 from ..retrieval import SchemaRetriever, build_embedder, load_examples, load_glossary
 from ..sandbox import build_sandbox
 from ..tools.contract import QueryResult
-from ..tools.database import ReadOnlyDatabase
 from ..tracing import NOOP_TRACER, RunTrace, Tracer
 from ..verify import check_answer
 from . import prompts
@@ -137,7 +136,7 @@ class InsightAgent:
     def __init__(
         self,
         settings: Settings,
-        db: ReadOnlyDatabase,
+        db,  # ReadOnlyDatabase / MySQLDatabase / PostgresDatabase（同鸭子类型接口）
         llm: BaseLLM,
         tracer: Tracer | None = None,
         memory=None,  # MemoryStore | None：跨会话用户口径记忆
@@ -361,7 +360,7 @@ class InsightAgent:
 
     def _node_generate_sql(self, state: _State) -> _State:
         messages = [
-            {"role": "system", "content": prompts.SQL_SYSTEM},
+            {"role": "system", "content": prompts.sql_system(self.db.dialect)},
             {
                 "role": "user",
                 "content": prompts.SQL_USER_TEMPLATE.format(
@@ -384,6 +383,7 @@ class InsightAgent:
             sql_raw,
             allowed_tables=self._allowed_tables,
             max_rows=self.settings.sql_max_rows,
+            dialect=self.db.dialect,
         )
         if not verdict.allowed:
             attempt = Attempt(
@@ -437,7 +437,7 @@ class InsightAgent:
         last = attempts[-1]
         history = "\n\n".join(a.describe(i + 1) for i, a in enumerate(attempts))
         messages = [
-            {"role": "system", "content": prompts.SQL_SYSTEM},
+            {"role": "system", "content": prompts.sql_system(self.db.dialect)},
             {
                 "role": "user",
                 "content": prompts.SQL_USER_TEMPLATE.format(

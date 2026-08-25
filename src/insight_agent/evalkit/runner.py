@@ -53,6 +53,13 @@ def run_eval(
     db_root: str | Path | None = None,
 ) -> dict:
     settings = get_settings()
+    from ..tools.engines import is_server_dsn
+
+    if is_server_dsn(settings.db_path):
+        raise ValueError(
+            "评测跑分当前仅支持 SQLite（BIRD/Spider/自建集的库都是 SQLite 文件）；"
+            "请把 DB_PATH 指向 SQLite 文件后再跑分。MySQL/PG 用于生产接入，不用于基准评测。"
+        )
     cases = load_cases(cases_path)
     if limit:
         cases = cases[:limit]

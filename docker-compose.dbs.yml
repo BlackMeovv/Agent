@@ -1,0 +1,27 @@
+# 本地起 MySQL + PostgreSQL 验证多引擎接入：
+#   make db-dumps                                    # 生成演示数据初始化脚本
+#   docker compose -f docker-compose.dbs.yml up -d
+#   insight-agent ask "上海的客户一共有多少个？" --db mysql://readonly:readonly@localhost:3306/insight
+#   insight-agent ask "上海的客户一共有多少个？" --db postgres://readonly:readonly@localhost:5432/insight
+# 注意连接串用的是 readonly 账号（00-user.sql 创建，只授 SELECT）——生产接入同理。
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: insight
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - ./docker/dbs/mysql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3306:3306"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: insight
+      POSTGRES_USER: insight
+      POSTGRES_PASSWORD: insight
+    volumes:
+      - ./docker/dbs/postgres:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"

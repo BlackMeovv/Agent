@@ -23,8 +23,9 @@ question → [LangGraph state machine]
 ## Features
 
 - **Database-agnostic**: schema is introspected at connection time; point `DB_PATH`
-  (or `--db`) at any SQLite file. BIRD evaluation runs the agent across dozens of
-  unseen third-party databases.
+  (or `--db`) at any SQLite file, or a `mysql://` / `postgres://` DSN (read-only
+  session + statement timeout enforced; a SELECT-only DB account is the documented
+  hard boundary). BIRD evaluation runs the agent across dozens of unseen databases.
 - **Eval harness first**: BIRD/Spider adapters with seeded, validated subsets; a
   236-case in-house business set (dev/holdout split); execution accuracy with Wilson
   95% CIs over repeated runs; McNemar significance between configs; an offline

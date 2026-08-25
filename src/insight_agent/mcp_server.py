@@ -55,6 +55,7 @@ def run_sql(sql: str) -> dict[str, Any]:
         sql,
         allowed_tables=set(agent.db.table_names()),
         max_rows=agent.settings.sql_max_rows,
+        dialect=agent.db.dialect,
     )
     if not verdict.allowed:
         return {"ok": False, "error_kind": verdict.error_kind, "error": verdict.reason}

@@ -18,11 +18,11 @@ def build_agent(settings: Settings | None = None) -> InsightAgent:
     """
     from .llm import LLMClient, MockLLM
     from .memory import MemoryStore
-    from .tools.database import ReadOnlyDatabase
+    from .tools.engines import open_database
     from .tracing import build_tracer
 
     settings = settings or get_settings()
-    db = ReadOnlyDatabase(
+    db = open_database(
         settings.db_path,
         timeout_seconds=settings.sql_timeout_seconds,
         max_rows=settings.sql_max_rows,

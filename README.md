@@ -40,17 +40,28 @@ docker compose up --build
 
 ## 接入你自己的数据库
 
-agent 与具体数据库**完全解耦**：schema 是连接时运行时自省的（建表语句+样例行），
-守卫白名单、检索索引都由所连的库派生，没有任何针对演示库的硬编码。换库只需：
+agent 与具体数据库**完全解耦**：schema 是连接时运行时自省的（建表语句+注释+样例行），
+守卫按所连引擎的方言解析、提示词按方言渲染、检索索引由所连的库派生，
+没有任何针对演示库的硬编码。支持三种引擎，换库只需改一个连接目标：
 
 ```bash
-insight-agent ask "任意问题" --db /path/to/your.sqlite   # 临时切换
-# 或在 .env 里改 DB_PATH，服务/评测全部跟随
+insight-agent ask "问题" --db /path/to/your.sqlite                        # SQLite 文件
+insight-agent ask "问题" --db mysql://readonly:pwd@host:3306/yourdb       # MySQL（uv sync --extra mysql）
+insight-agent ask "问题" --db postgres://readonly:pwd@host:5432/yourdb    # PostgreSQL（--extra postgres）
+# 或在 .env 里改 DB_PATH，服务/CLI 全部跟随
+```
+
+服务器引擎的只读纵深：AST 守卫（第一道）+ 会话级只读与语句超时（第二道，
+MySQL `SET SESSION TRANSACTION READ ONLY` / PG `default_transaction_read_only`）+
+**只读数据库账号（硬边界，生产接入的部署要求）**。本地验证：
+
+```bash
+make db-dumps && docker compose -f docker-compose.dbs.yml up -d   # 一键起带演示数据的 MySQL+PG
+insight-agent ask "上海的客户一共有多少个？" --db mysql://readonly:readonly@localhost:3306/insight
 ```
 
 内置电商演示库只是让仓库开箱即跑的样例数据；跑 BIRD 基准时 agent 会在
 几十个从未见过的第三方库上逐题切换（`--db-root`），这本身就是泛化能力的证明。
-MySQL/Postgres 接入在 Roadmap（sqlglot 方言转换 + 只读账号，守卫层已按方言参数化设计）。
 
 ## 其他入口
 

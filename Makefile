@@ -41,3 +41,8 @@ business:           ## 业务集跑分：make business LABEL=baseline
 
 serve:              ## 启动服务（网页 http://localhost:8000）
 	uv run insight-agent serve
+
+db-dumps:           ## 生成 MySQL/PG 演示库初始化脚本（配合 docker-compose.dbs.yml）
+	uv run python -m insight_agent.demo_data --dump mysql > docker/dbs/mysql/10-data.sql
+	uv run python -m insight_agent.demo_data --dump postgres > docker/dbs/postgres/10-data.sql
+	@echo "已生成 docker/dbs/{mysql,postgres}/10-data.sql"

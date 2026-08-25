@@ -27,6 +27,8 @@ _ALLOWED_AUTH_OPS = {
 
 
 class ReadOnlyDatabase:
+    dialect = "sqlite"
+
     def __init__(self, db_path: str | Path, timeout_seconds: float = 15, max_rows: int = 200):
         self.db_path = Path(db_path)
         if not self.db_path.exists():

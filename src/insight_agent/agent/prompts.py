@@ -1,7 +1,7 @@
 """提示词集中管理。全部与具体业务库解耦——schema 与样例行由上下文注入，
 后续接入 BIRD/Spider 时提示词不需要改动。"""
 
-SQL_SYSTEM = """你是一名资深数据分析工程师，负责把用户的业务问题翻译成 SQLite 查询。
+_SQL_SYSTEM_TEMPLATE = """你是一名资深数据分析工程师，负责把用户的业务问题翻译成 {dialect_name} 查询。
 
 规则：
 1. 只允许生成一条 SELECT 查询（可以用 WITH 子句），绝不生成任何写操作。
@@ -9,8 +9,24 @@ SQL_SYSTEM = """你是一名资深数据分析工程师，负责把用户的业�
 3. 仔细观察 schema 注释与样例行，确认日期格式、枚举值的真实写法后再写过滤条件。
 4. 需要金额时注意区分：成交金额用 order_items 的 quantity*unit_price 之类的成交价字段（如果存在），不要误用商品目录价。
 5. 除非用户明确要求全部数据，聚合/排序类问题优先返回聚合结果。
+6. 方言注意：{dialect_hints}
 
 输出格式：第一行用一句话说明思路，然后给出一个 ```sql 代码块，里面只放最终的一条 SQL。"""
+
+_DIALECTS = {
+    "sqlite": ("SQLite", "日期是 'YYYY-MM-DD' 文本，用 strftime 处理；不支持 RIGHT JOIN。"),
+    "mysql": ("MySQL", "日期用 DATE_FORMAT/DATE 函数；标识符如需引用用反引号；注意 ONLY_FULL_GROUP_BY 约束。"),
+    "postgres": ("PostgreSQL", "日期用 to_char/date_trunc；标识符默认小写、区分大小写时用双引号；字符串比较大小写敏感。"),
+}
+
+
+def sql_system(dialect: str = "sqlite") -> str:
+    name, hints = _DIALECTS.get(dialect, (dialect, "遵循该方言的标准语法。"))
+    return _SQL_SYSTEM_TEMPLATE.format(dialect_name=name, dialect_hints=hints)
+
+
+# 兼容旧引用（默认 SQLite）
+SQL_SYSTEM = sql_system("sqlite")
 
 SQL_USER_TEMPLATE = """数据库 schema（含样例行）：
 
