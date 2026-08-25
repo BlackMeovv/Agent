@@ -1,0 +1,21 @@
+# env / secrets
+.env
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+
+# data & artifacts (generated)
+data/demo/*.sqlite
+eval/results/
+*.log
+
+# editors
+.idea/
+.vscode/
+.DS_Store

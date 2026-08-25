@@ -1,0 +1,135 @@
+"""针对代码审查确认缺陷的回归测试。每个测试对应一条已修复的发现。"""
+
+import sqlite3
+
+from insight_agent.agent import InsightAgent
+from insight_agent.agent.graph import extract_sql
+from insight_agent.evalkit.scorer import execution_match
+from insight_agent.llm import MockLLM
+
+
+def make_agent(settings, db, replies):
+    return InsightAgent(settings, db, MockLLM(replies))
+
+
+def sql_reply(sql: str) -> str:
+    return f"思路说明。\n```sql\n{sql}\n```"
+
+
+class TestAcceptEmptyStrictness:
+    def test_resending_older_failed_sql_is_not_confirmation(self, settings, db):
+        """重发【更早的失败 SQL】是模型混乱，不能被当成"确认空结果"。"""
+        bad = "SELECT nope FROM customers"
+        empty = "SELECT * FROM customers WHERE city = '月球'"
+        agent = make_agent(
+            settings,
+            db,
+            [sql_reply(bad), sql_reply(empty), sql_reply(bad)],  # 最后模型回退到更早的坏 SQL
+        )
+        outcome = agent.ask("月球的客户？", generate_answer=False)
+        assert outcome.status != "ok_empty"
+
+    def test_resending_last_empty_sql_is_confirmation(self, settings, db):
+        empty = "SELECT * FROM customers WHERE city = '月球'"
+        agent = make_agent(settings, db, [sql_reply(empty)])  # repair 原样重发同一条
+        outcome = agent.ask("月球的客户？", generate_answer=False)
+        assert outcome.status == "ok_empty"
+
+
+class TestGenerateAnswerInState:
+    def test_no_cross_call_leakage(self, settings, db):
+        """generate_answer 必须在图状态里，不能是实例属性（并发串扰）。"""
+        good = "SELECT COUNT(*) FROM customers"
+        agent1 = make_agent(settings, db, [sql_reply(good), "总结。"])
+        out1 = agent1.ask("客户数？", generate_answer=True)
+        assert out1.usage["llm_calls"] == 2 and out1.answer == "总结。"
+        # 直接验证实现：不允许存在跨调用的实例属性
+        assert not hasattr(agent1, "_generate_answer")
+
+
+class TestPredictedSqlForScoring:
+    def test_guard_limit_does_not_break_ex(self, settings, db, demo_db_path):
+        """守卫注入的 LIMIT 不参与 EX 判定：>200 行的正确预测必须判对。"""
+        sql = "SELECT name FROM customers"  # 240 行 > 行数限额 200
+        agent = make_agent(settings, db, [sql_reply(sql)])
+        outcome = agent.ask("列出所有客户姓名", generate_answer=False)
+        assert outcome.status == "ok"
+        assert "limit" in (outcome.final_sql or "").lower()  # 执行版被限额
+        assert "limit" not in (outcome.predicted_sql or "").lower()  # 评测版没被污染
+        assert execution_match(demo_db_path, outcome.predicted_sql, sql).match
+
+
+class TestBudgetStatus:
+    def test_budget_exceeded_status_via_route(self, settings, db):
+        tight = settings.model_copy(update={"agent_max_tokens_per_run": 1})
+        agent = make_agent(tight, db, [sql_reply("SELECT bad FROM customers")])
+        outcome = agent.ask("问题", generate_answer=False)
+        assert outcome.status == "budget_exceeded"
+        assert "预算超限" in outcome.answer
+
+
+class TestRecursionLimit:
+    def test_high_repair_rounds_do_not_crash(self, settings, db):
+        """max_repair_rounds 调大不允许触发 LangGraph 默认 recursion_limit=25。"""
+        deep = settings.model_copy(update={"agent_max_repair_rounds": 15})
+        replies = [sql_reply(f"SELECT col_{i} FROM customers") for i in range(20)]
+        agent = make_agent(deep, db, replies)
+        outcome = agent.ask("问题", generate_answer=False)  # 不允许抛异常
+        assert outcome.status == "failed"
+        assert len(outcome.attempts) == 1 + deep.agent_max_repair_rounds
+
+
+class TestExtractSqlVariants:
+    def test_sqlite_language_tag(self):
+        assert extract_sql("```sqlite\nSELECT 1\n```") == "SELECT 1"
+
+    def test_plain_fence(self):
+        assert extract_sql("```\nSELECT 1\n```") == "SELECT 1"
+
+    def test_prefers_sql_block_over_json(self):
+        text = '思路：\n```json\n{"plan": 1}\n```\n```sql\nSELECT 2\n```'
+        assert extract_sql(text) == "SELECT 2"
+
+    def test_select_block_without_tag_among_others(self):
+        text = "```json\n{}\n```\n```\nWITH t AS (SELECT 1) SELECT * FROM t\n```"
+        assert extract_sql(text).startswith("WITH t AS")
+
+    def test_no_fence_at_all(self):
+        assert extract_sql("SELECT 3;") == "SELECT 3"
+
+
+class TestScorerEmptyColumns:
+    def test_both_empty_but_different_columns(self, demo_db_path):
+        gold = "SELECT id FROM customers WHERE 1 = 0"
+        pred = "SELECT id, name FROM customers WHERE 1 = 0"
+        score = execution_match(demo_db_path, pred, gold)
+        assert not score.match and "列数" in score.reason
+
+    def test_both_empty_same_columns_match(self, demo_db_path):
+        gold = "SELECT id FROM customers WHERE 1 = 0"
+        pred = "SELECT id FROM customers WHERE 2 = 1"
+        assert execution_match(demo_db_path, pred, gold).match
+
+
+class TestDemoDataWindow:
+    def test_all_dates_within_window(self, demo_db_path):
+        conn = sqlite3.connect(demo_db_path)
+        try:
+            max_order = conn.execute("SELECT MAX(order_date) FROM orders").fetchone()[0]
+            max_signup = conn.execute("SELECT MAX(signup_date) FROM customers").fetchone()[0]
+            min_order = conn.execute(
+                "SELECT MIN(julianday(o.order_date) - julianday(c.signup_date)) "
+                "FROM orders o JOIN customers c ON o.customer_id = c.id"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert max_order <= "2025-06-30"
+        assert max_signup <= "2025-06-29"
+        assert min_order >= 0  # 订单不得早于注册
+
+
+class TestUnmeteredAccounting:
+    def test_meter_snapshot_exposes_unmetered(self, settings, db):
+        agent = make_agent(settings, db, [sql_reply("SELECT COUNT(*) FROM customers")])
+        outcome = agent.ask("客户数？", generate_answer=False)
+        assert "unmetered_calls" in outcome.usage

@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Unit tests (offline)
+        run: uv run pytest
+      - name: Build demo database
+        run: uv run python -m insight_agent.demo_data
+      - name: Eval harness self-check (gold replay must be 100%)
+        run: uv run python -m insight_agent.evalkit.runner --cases eval/cases/smoke.jsonl --gold-replay

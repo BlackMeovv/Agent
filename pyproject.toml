@@ -1,0 +1,35 @@
+[project]
+name = "insight-agent"
+version = "0.1.0"
+description = "Enterprise data-analysis agent: NL question -> schema context -> SQL -> guarded execution -> self-repair -> answer, with an execution-accuracy eval harness"
+readme = "README.md"
+authors = [
+    { name = "BlackMeovv", email = "blackmeovvx@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.2,<0.4",
+    "openai>=1.40",
+    "sqlglot>=25.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-timeout>=2.3",
+]
+
+[project.scripts]
+insight-agent = "insight_agent.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

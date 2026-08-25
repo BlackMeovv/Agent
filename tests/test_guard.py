@@ -1,0 +1,99 @@
+from insight_agent.guard import validate
+
+TABLES = {"customers", "orders", "products", "categories", "order_items", "payments"}
+
+
+def ok(sql, **kw):
+    verdict = validate(sql, allowed_tables=TABLES, max_rows=kw.pop("max_rows", 200))
+    assert verdict.allowed, f"应放行但被拒: {verdict.reason}"
+    return verdict
+
+
+def rejected(sql, kind=None):
+    verdict = validate(sql, allowed_tables=TABLES, max_rows=200)
+    assert not verdict.allowed, f"应拒绝但放行: {verdict.sql}"
+    if kind:
+        assert verdict.error_kind == kind, f"错误分类应为 {kind}，实际 {verdict.error_kind}"
+    return verdict
+
+
+class TestAllowed:
+    def test_simple_select(self):
+        ok("SELECT * FROM customers")
+
+    def test_join_and_group(self):
+        ok(
+            "SELECT c.city, COUNT(*) FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.city"
+        )
+
+    def test_cte(self):
+        ok("WITH t AS (SELECT customer_id FROM orders) SELECT COUNT(*) FROM t")
+
+    def test_subquery(self):
+        ok("SELECT AVG(cnt) FROM (SELECT SUM(quantity) AS cnt FROM order_items GROUP BY order_id)")
+
+    def test_union(self):
+        ok("SELECT id FROM customers UNION SELECT id FROM products")
+
+    def test_no_table_select(self):
+        ok("SELECT 1 + 1")
+
+    def test_trailing_semicolon(self):
+        ok("SELECT * FROM customers;")
+
+
+class TestLimitEnforcement:
+    def test_limit_injected(self):
+        verdict = ok("SELECT * FROM customers")
+        assert "LIMIT 200" in verdict.sql.upper()
+
+    def test_oversized_limit_clamped(self):
+        verdict = ok("SELECT * FROM customers LIMIT 99999")
+        assert "99999" not in verdict.sql
+        assert "LIMIT 200" in verdict.sql.upper()
+
+    def test_small_limit_kept(self):
+        verdict = ok("SELECT * FROM customers LIMIT 5")
+        assert "LIMIT 5" in verdict.sql.upper()
+
+
+class TestRejected:
+    def test_insert(self):
+        rejected("INSERT INTO customers (id, name) VALUES (1, 'x')", "guard_rejected")
+
+    def test_update(self):
+        rejected("UPDATE customers SET name = 'x'", "guard_rejected")
+
+    def test_delete(self):
+        rejected("DELETE FROM customers", "guard_rejected")
+
+    def test_drop(self):
+        rejected("DROP TABLE customers", "guard_rejected")
+
+    def test_pragma(self):
+        rejected("PRAGMA table_info(customers)", "guard_rejected")
+
+    def test_multi_statement_stacked_write(self):
+        rejected("SELECT * FROM customers; DROP TABLE customers", "guard_rejected")
+
+    def test_unknown_table(self):
+        rejected("SELECT * FROM users", "guard_rejected")
+
+    def test_sqlite_master(self):
+        rejected("SELECT * FROM sqlite_master", "guard_rejected")
+
+    def test_schema_prefix(self):
+        rejected("SELECT * FROM main.customers", "guard_rejected")
+
+    def test_table_valued_function(self):
+        rejected("SELECT * FROM pragma_table_info('customers')", "guard_rejected")
+
+    def test_syntax_error(self):
+        rejected("SELEC * FROM customers", "syntax_error")
+
+    def test_empty(self):
+        rejected("", "guard_rejected")
+
+    def test_write_hidden_in_cte(self):
+        # sqlite 不支持 CTE 里写操作，但守卫要在解析层就拒绝
+        rejected("WITH t AS (DELETE FROM customers) SELECT 1")

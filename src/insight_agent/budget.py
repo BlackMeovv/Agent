@@ -1,0 +1,71 @@
+"""单次运行的用量计量与预算熔断。
+
+设计约束：预算护栏必须在编排层生效（每次 LLM 调用前检查），
+而不是指望模型自己"省着用"。超限后 agent 走降级收尾，不再调用 LLM。
+"""
+
+from dataclasses import dataclass, field
+
+
+class BudgetExceeded(RuntimeError):
+    """预算（token 或金额）超限。"""
+
+
+@dataclass
+class UsageMeter:
+    """按次运行累计 token / 成本 / 调用数。价格单位：每百万 token。"""
+
+    price_input_per_m: float = 0.0
+    price_output_per_m: float = 0.0
+    max_tokens: int = 0  # 0 = 不限制
+    max_cost: float = 0.0  # 0 = 不限制
+
+    llm_calls: int = 0
+    unmetered_calls: int = 0  # 上游未返回 usage、按字符估算记账的调用数
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    by_tag: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def total_tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+    @property
+    def cost(self) -> float:
+        return (
+            self.prompt_tokens * self.price_input_per_m
+            + self.completion_tokens * self.price_output_per_m
+        ) / 1_000_000
+
+    def add(self, prompt_tokens: int, completion_tokens: int, tag: str = "") -> None:
+        self.llm_calls += 1
+        self.prompt_tokens += int(prompt_tokens or 0)
+        self.completion_tokens += int(completion_tokens or 0)
+        if tag:
+            self.by_tag[tag] = self.by_tag.get(tag, 0) + int(prompt_tokens or 0) + int(
+                completion_tokens or 0
+            )
+
+    def exceeded(self) -> bool:
+        if self.max_tokens and self.total_tokens >= self.max_tokens:
+            return True
+        if self.max_cost and self.cost >= self.max_cost:
+            return True
+        return False
+
+    def check(self) -> None:
+        if self.exceeded():
+            raise BudgetExceeded(
+                f"预算超限: tokens={self.total_tokens}/{self.max_tokens or '∞'}, "
+                f"cost={self.cost:.6f}/{self.max_cost or '∞'}"
+            )
+
+    def snapshot(self) -> dict:
+        return {
+            "llm_calls": self.llm_calls,
+            "unmetered_calls": self.unmetered_calls,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "cost": round(self.cost, 6),
+        }
