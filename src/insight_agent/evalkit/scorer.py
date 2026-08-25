@@ -45,6 +45,20 @@ def _run(db_path: str | Path, sql: str) -> tuple[int, list[tuple]]:
         conn.close()
 
 
+def tables_in_sql(sql: str) -> set[str]:
+    """提取 SQL 引用的真实表名（排除 CTE 别名，小写）。选表召回率用。"""
+    try:
+        tree = sqlglot.parse_one(sql, read="sqlite")
+    except sqlglot.errors.ParseError:
+        return set()
+    cte_names = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}
+    return {
+        t.name.lower()
+        for t in tree.find_all(exp.Table)
+        if isinstance(t.this, exp.Identifier) and t.name.lower() not in cte_names
+    }
+
+
 def gold_order_matters(gold_sql: str) -> bool:
     try:
         tree = sqlglot.parse_one(gold_sql, read="sqlite")

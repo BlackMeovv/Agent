@@ -28,7 +28,7 @@ from ..agent import InsightAgent
 from ..config import get_settings
 from ..llm import LLMClient, MockLLM
 from ..tools.database import ReadOnlyDatabase
-from .scorer import execution_match
+from .scorer import execution_match, tables_in_sql
 from .stats import wilson_interval
 
 console = Console()
@@ -111,6 +111,12 @@ def run_eval(
             entry["tokens"] += outcome.usage.get("total_tokens", 0)
             entry["cost"] += outcome.usage.get("cost", 0.0)
             entry["latency"].append(outcome.latency_ms)
+            # 选表召回率：Schema RAG 的独立归因指标（gold 引用的表被检索命中的比例）
+            if outcome.selected_tables is not None:
+                gold_tables = tables_in_sql(case["gold_sql"])
+                if gold_tables:
+                    hit = gold_tables & {t.lower() for t in outcome.selected_tables}
+                    entry.setdefault("table_recall", []).append(len(hit) / len(gold_tables))
             entry["last"] = {
                 "ex": score.match,
                 "reason": score.reason,
@@ -134,6 +140,7 @@ def run_eval(
     results = []
     for case in cases:
         entry = per_case[case["id"]]
+        recalls = entry.get("table_recall")
         results.append(
             {
                 "id": case["id"],
@@ -142,6 +149,7 @@ def run_eval(
                 "db": case.get("db"),
                 "ex_by_repeat": entry["ex_by_repeat"],
                 "success_rate": round(sum(entry["ex_by_repeat"]) / repeats, 4),
+                "table_recall": round(sum(recalls) / len(recalls), 4) if recalls else None,
                 "tokens": entry["tokens"],
                 "cost": round(entry["cost"], 6),
                 "avg_latency_ms": int(sum(entry["latency"]) / len(entry["latency"])),
@@ -162,6 +170,15 @@ def run_eval(
         "wilson_low": round(low, 4),
         "wilson_high": round(high, 4),
         "per_repeat_accuracy": per_repeat_accuracy,
+        "avg_table_recall": (
+            round(
+                sum(r["table_recall"] for r in results if r["table_recall"] is not None)
+                / max(1, sum(1 for r in results if r["table_recall"] is not None)),
+                4,
+            )
+            if any(r["table_recall"] is not None for r in results)
+            else None
+        ),
         "total_cost": round(sum(e["cost"] for e in per_case.values()), 6),
         "total_tokens": sum(e["tokens"] for e in per_case.values()),
         "avg_latency_ms": (
@@ -185,6 +202,8 @@ def run_eval(
     table.add_row("执行准确率 EX（95% CI）", f"{pooled}/{total_trials} = {ci}")
     if repeats > 1:
         table.add_row("各次重复", ", ".join(f"{a:.1%}" for a in per_repeat_accuracy))
+    if summary["avg_table_recall"] is not None:
+        table.add_row("选表召回率（Schema RAG）", f"{summary['avg_table_recall']:.1%}")
     table.add_row("总成本", f"{summary['total_cost']:.6f}")
     table.add_row("总 tokens", str(summary["total_tokens"]))
     table.add_row("平均单题延迟", f"{summary['avg_latency_ms']} ms")

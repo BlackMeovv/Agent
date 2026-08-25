@@ -60,28 +60,40 @@ class ReadOnlyDatabase:
             conn.close()
         return [r[0] for r in rows]
 
-    def schema_text(self, sample_rows: int = 3) -> str:
-        """给 LLM 的 schema 上下文：建表 DDL + 每表少量样例行（值格式很关键）。"""
-        parts: list[str] = []
+    def schema_by_table(self, sample_rows: int = 3, max_cell: int = 60) -> dict[str, str]:
+        """逐表的 schema 上下文：建表 DDL + 少量样例行（值格式很关键）。
+
+        按表拆开是 Schema RAG 的基础——大库场景下只把检索命中的表喂给模型。
+        样例单元格截断，防止 BIRD 这类库里的长文本撑爆上下文。
+        """
+        out: dict[str, str] = {}
         conn = self._connect()
         try:
             ddls = conn.execute(
                 "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
             ).fetchall()
             for name, ddl in ddls:
-                parts.append(f"{ddl.strip()};")
+                parts = [f"{ddl.strip()};"]
                 if sample_rows > 0:
                     cur = conn.execute(f'SELECT * FROM "{name}" LIMIT {int(sample_rows)}')
                     cols = [d[0] for d in cur.description]
                     lines = [", ".join(cols)]
                     for row in cur.fetchall():
-                        lines.append(", ".join("NULL" if v is None else str(v) for v in row))
+                        cells = []
+                        for v in row:
+                            text = "NULL" if v is None else str(v)
+                            cells.append(text[:max_cell] + "…" if len(text) > max_cell else text)
+                        lines.append(", ".join(cells))
                     sample = "\n--   ".join(lines)
                     parts.append(f"-- {name} 样例行:\n--   {sample}")
-                parts.append("")
+                out[name] = "\n".join(parts)
         finally:
             conn.close()
-        return "\n".join(parts)
+        return out
+
+    def schema_text(self, sample_rows: int = 3) -> str:
+        """全量 schema 上下文（小库直接全喂；大库走 Schema RAG 选表）。"""
+        return "\n\n".join(self.schema_by_table(sample_rows).values())
 
     # ---------- query ----------
 

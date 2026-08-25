@@ -27,9 +27,11 @@ from ..budget import BudgetExceeded, UsageMeter
 from ..config import Settings
 from ..guard import validate
 from ..llm import BaseLLM, LLMError
+from ..retrieval import SchemaRetriever, build_embedder, load_examples, load_glossary
 from ..tools.contract import QueryResult
 from ..tools.database import ReadOnlyDatabase
 from ..tracing import NOOP_TRACER, RunTrace, Tracer
+from ..verify import check_answer
 from . import prompts
 
 
@@ -54,6 +56,8 @@ class RunOutcome:
     answer: str = ""
     final_sql: str | None = None  # 实际执行的 SQL（守卫改写后，含注入的 LIMIT）
     predicted_sql: str | None = None  # 模型原始 SQL（评测打分用）
+    selected_tables: list[str] | None = None  # Schema RAG 选中的表（未启用时为 None）
+    hallucination_blocked: bool = False  # 回答因数字无出处被拦截降级
     result: QueryResult | None = None
     attempts: list[Attempt] = field(default_factory=list)
     usage: dict = field(default_factory=dict)
@@ -74,6 +78,7 @@ class _State(TypedDict, total=False):
     give_up_reason: str
     status: str
     answer: str
+    hallucination_blocked: bool
     meter: Any  # UsageMeter（对象通道，就地累加）
     trace: Any  # RunTrace（追踪句柄，未启用时为 no-op）
 
@@ -116,8 +121,37 @@ class InsightAgent:
         self.llm = llm
         self.tracer = tracer or NOOP_TRACER
         self._allowed_tables = set(db.table_names())
-        self._schema_context = db.schema_text()
+        self._table_docs = db.schema_by_table()
+        self._full_schema = "\n\n".join(self._table_docs.values())
+        self._retriever = SchemaRetriever(self._table_docs, embedder=build_embedder(settings))
+        self._glossary = load_glossary(settings.glossary_path)
+        self._examples = load_examples(settings.examples_path)
         self._graph = self._build_graph()
+
+    def _build_schema_context(self, question: str) -> tuple[str, list[str] | None]:
+        """按问题组装 schema 上下文。
+
+        大库不能全量塞 prompt（贵且触发 Lost in the Middle）——auto 模式下
+        表数超过 top_k 才启用检索选表；命中的业务字典与相似例句始终附加。
+        """
+        mode = self.settings.schema_rag
+        k = self.settings.schema_rag_top_k
+        use_rag = mode == "on" or (mode == "auto" and len(self._table_docs) > k)
+        if use_rag:
+            selected = self._retriever.top_tables(question, k)
+            context = "\n\n".join(self._table_docs[t] for t in selected)
+        else:
+            selected = None
+            context = self._full_schema
+
+        top_n = self.settings.knowledge_top_n
+        glossary_hits = self._glossary.top(question, top_n)
+        if glossary_hits:
+            context += "\n\n业务字典（口径定义）：\n" + "\n".join(e.body for e in glossary_hits)
+        example_hits = self._examples.top(question, top_n)
+        if example_hits:
+            context += "\n\n相似问题参考：\n" + "\n\n".join(e.body for e in example_hits)
+        return context, selected
 
     # ---------- public ----------
 
@@ -131,9 +165,12 @@ class InsightAgent:
             max_cost=self.settings.agent_max_cost_per_run,
         )
         trace = self.tracer.start_run(question)
+        schema_context, selected_tables = self._build_schema_context(question)
+        if selected_tables is not None:
+            trace.span("schema_rag", metadata={"selected_tables": selected_tables})
         state: _State = {
             "question": question,
-            "schema_context": self._schema_context,
+            "schema_context": schema_context,
             "attempts": [],
             "generate_answer": generate_answer,
             "meter": meter,
@@ -156,6 +193,8 @@ class InsightAgent:
             answer=final.get("answer", ""),
             final_sql=executed_sql,
             predicted_sql=raw_sql,
+            selected_tables=selected_tables,
+            hallucination_blocked=final.get("hallucination_blocked", False),
             result=last_ok.result if last_ok else None,
             attempts=attempts,
             usage=meter.snapshot(),
@@ -309,7 +348,13 @@ class InsightAgent:
                     schema=state["schema_context"], question=state["question"]
                 ),
             },
-            {"role": "user", "content": prompts.REPAIR_USER_TEMPLATE.format(attempts=history)},
+            {
+                "role": "user",
+                "content": prompts.REPAIR_USER_TEMPLATE.format(
+                    attempts=history,
+                    hint=prompts.REPAIR_HINTS.get(last.error_kind or "", ""),
+                ),
+            },
         ]
         for inner_round in range(2):  # 第二轮带"换思路"提醒
             try:
@@ -370,7 +415,46 @@ class InsightAgent:
             # 总结失败不影响查询本身的成功：降级为直接给数据预览
             return {"status": "ok", "answer": f"查询成功，结果如下：\n{last_ok.result.preview()}"}
         self._record_generation(state, "answer", messages, reply)
-        return {"status": "ok", "answer": reply.text.strip()}
+        answer_text = reply.text.strip()
+
+        if not self.settings.answer_verify:
+            return {"status": "ok", "answer": answer_text}
+
+        # 防幻觉校验：回答里的数字必须在查询结果/问题/SQL 里有出处
+        violations = check_answer(
+            answer_text, last_ok.result, state["question"], last_ok.sql_final or ""
+        )
+        if violations:
+            retry_messages = messages + [
+                {"role": "assistant", "content": reply.text},
+                {
+                    "role": "user",
+                    "content": prompts.ANSWER_RETRY_TEMPLATE.format(violations="、".join(violations)),
+                },
+            ]
+            try:
+                retry_reply = self.llm.chat(retry_messages, state["meter"], tag="answer_retry")
+                self._record_generation(state, "answer_retry", retry_messages, retry_reply)
+                retry_text = retry_reply.text.strip()
+                violations = check_answer(
+                    retry_text, last_ok.result, state["question"], last_ok.sql_final or ""
+                )
+                if not violations:
+                    answer_text = retry_text
+            except (BudgetExceeded, LLMError):
+                pass  # 重写失败按仍有违规处理，走降级
+        self._trace(state).span("hallucination_check", metadata={"violations": violations})
+        if violations:
+            # 一次重写仍有无出处数字：拒绝出稿，降级为确定性的结果预览
+            return {
+                "status": "ok",
+                "answer": (
+                    "（回答中存在无出处的数字，已自动降级为原始查询结果）\n"
+                    + last_ok.result.preview(max_rows=20)
+                ),
+                "hallucination_blocked": True,
+            }
+        return {"status": "ok", "answer": answer_text}
 
     def _node_fallback(self, state: _State) -> _State:
         """无 LLM 降级收尾：把已知信息如实交代，绝不编造。"""

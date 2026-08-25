@@ -4,10 +4,12 @@
 
 ```
 用户提问 → [LangGraph 状态机]
-             ├─ generate_sql   基于 schema 上下文生成 SQL
+             ├─ schema_rag     混合检索选表（BM25 + 可选向量，RRF 融合）+ 业务字典/例句注入
+             ├─ generate_sql   基于检索出的 schema 上下文生成 SQL
              ├─ execute        sqlglot AST 守卫 → 只读执行（超时/行数限额）
-             ├─ repair         手写 Reason-Act-Observe 修复循环（结构化错误分类 + 重复检测）
-             ├─ summarize      基于查询结果作答（不编造数字）
+             ├─ repair         手写 Reason-Act-Observe 修复循环（按错误类型定向提示 + 重复检测）
+             ├─ summarize      基于查询结果作答 → 防幻觉校验：每个数字必须有出处，
+             │                 违规先重写一次、仍失败则降级为确定性结果预览
              └─ fallback       轮次/预算耗尽时的无 LLM 降级收尾
 ```
 
@@ -71,6 +73,6 @@ make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 
 - [x] Week 1：最小闭环（生成 → 守卫 → 执行 → 自纠错）+ 冒烟评测集 + 离线测试
 - [x] Week 2：BIRD/Spider 基准接入、Langfuse 追踪、Wilson 置信区间 + McNemar 检验、消融对比报告
-- [ ] Week 3：Schema RAG（混合检索选表）、按错误类型的修复策略、防幻觉数字校验
+- [x] Week 3：Schema RAG（BM25+向量混合检索选表 + 选表召回率指标）、业务字典/few-shot 例句注入、按错误类型的修复提示、防幻觉数字校验
 - [ ] Week 4：图表沙箱、FastAPI + SSE 流式服务、docker compose 一键部署
 - [ ] Week 5+：MCP server、跨会话记忆、200+ 条业务评测集、压测与监控大盘、多模型横评

@@ -1,0 +1,8 @@
+# 业务字典：口径定义（jsonl，每行 {"term", "definition"}）。按问题 BM25 检索 top-n 注入 prompt。
+# 这是"业务黑话 → 正确 SQL 口径"的桥梁，真实业务里这份文件来自数仓文档/口径表。
+{"term": "成交金额", "definition": "订单明细的成交额：SUM(order_items.quantity * order_items.unit_price)。不要用商品目录价 products.price 计算成交金额"}
+{"term": "GMV", "definition": "同成交金额：SUM(order_items.quantity * order_items.unit_price)"}
+{"term": "毛利", "definition": "SUM((order_items.unit_price - products.cost) * order_items.quantity)"}
+{"term": "沉默客户", "definition": "注册后从未下过订单的客户：customers 中不存在对应 orders 记录的客户"}
+{"term": "金卡及以上", "definition": "customers.vip_level >= 2（0 普通、1 银卡、2 金卡、3 钻石）"}
+{"term": "已完成订单", "definition": "orders.status = 'completed'"}

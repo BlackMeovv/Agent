@@ -1,0 +1,3 @@
+# few-shot 例句库（jsonl，每行 {"question", "sql"}）。按问题相似度检索 top-n 注入 prompt。
+# ⚠️ 纪律：例句只能来自 bad case 复盘后人工修正的真实问答，
+# 绝不允许把评测集（smoke/BIRD/自建集）里的题放进来——那是数据泄漏，评测数字会作废。

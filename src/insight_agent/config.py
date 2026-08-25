@@ -27,6 +27,22 @@ class Settings(BaseSettings):
     agent_max_tokens_per_run: int = 200_000
     agent_max_cost_per_run: float = 0.05
 
+    # Schema RAG：on=强制启用 / off=全量 schema / auto=表数超过 top_k 才启用
+    schema_rag: str = "auto"
+    schema_rag_top_k: int = 6
+    # 业务字典 / few-shot 例句（jsonl，选填；路径不存在则自动跳过）
+    glossary_path: str = "eval/knowledge/glossary.jsonl"
+    examples_path: str = "eval/knowledge/examples.jsonl"
+    knowledge_top_n: int = 3
+
+    # 可选向量检索（任何 OpenAI 兼容 embeddings 接口；不配置则纯 BM25）
+    embed_api_key: str = ""
+    embed_base_url: str = ""
+    embed_model: str = ""
+
+    # 回答防幻觉数字校验
+    answer_verify: bool = True
+
     # SQL 守卫
     sql_timeout_seconds: float = 15
     sql_max_rows: int = 200

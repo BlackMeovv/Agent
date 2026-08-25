@@ -17,12 +17,13 @@ GOOD_SQL = "SELECT COUNT(*) FROM customers WHERE city = '上海'"
 
 class TestHappyPath:
     def test_first_try_success(self, settings, db):
-        agent = make_agent(settings, db, [sql_reply(GOOD_SQL), "上海共有 20 位客户。"])
+        cnt = db.run_query(GOOD_SQL).rows[0][0]  # 数字动态取，避免被防幻觉校验拦下
+        agent = make_agent(settings, db, [sql_reply(GOOD_SQL), f"上海共有 {cnt} 位客户。"])
         outcome = agent.ask("上海的客户一共有多少个？")
         assert outcome.status == "ok"
         assert outcome.final_sql and "customers" in outcome.final_sql
         assert len(outcome.attempts) == 1
-        assert outcome.answer == "上海共有 20 位客户。"
+        assert outcome.answer == f"上海共有 {cnt} 位客户。"
         assert outcome.usage["llm_calls"] == 2  # 生成 + 总结
 
     def test_skip_answer_saves_a_call(self, settings, db):

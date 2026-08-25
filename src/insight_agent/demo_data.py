@@ -37,43 +37,43 @@ _STATUSES = ["completed", "completed", "completed", "completed", "shipped", "pen
 _PAY_METHODS = ["alipay", "wechat", "card"]
 
 _SCHEMA = """
-CREATE TABLE customers (
+CREATE TABLE customers (                -- 客户表：客户姓名、所在城市、注册日期、会员等级
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    city TEXT NOT NULL,
-    signup_date TEXT NOT NULL,          -- YYYY-MM-DD
-    vip_level INTEGER NOT NULL DEFAULT 0 -- 0 普通, 1 银卡, 2 金卡, 3 钻石
+    name TEXT NOT NULL,                 -- 客户姓名
+    city TEXT NOT NULL,                 -- 所在城市
+    signup_date TEXT NOT NULL,          -- 注册日期 YYYY-MM-DD
+    vip_level INTEGER NOT NULL DEFAULT 0 -- 会员等级: 0 普通, 1 银卡, 2 金卡, 3 钻石
 );
-CREATE TABLE categories (
+CREATE TABLE categories (               -- 商品品类表
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL
+    name TEXT NOT NULL                  -- 品类名称
 );
-CREATE TABLE products (
+CREATE TABLE products (                 -- 商品表：所属品类、售价、成本
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL,                 -- 商品名称
     category_id INTEGER NOT NULL REFERENCES categories(id),
-    price REAL NOT NULL,                -- 售价
+    price REAL NOT NULL,                -- 售价（目录价）
     cost REAL NOT NULL                  -- 成本
 );
-CREATE TABLE orders (
+CREATE TABLE orders (                   -- 订单表：下单客户、下单日期、订单状态
     id INTEGER PRIMARY KEY,
     customer_id INTEGER NOT NULL REFERENCES customers(id),
-    order_date TEXT NOT NULL,           -- YYYY-MM-DD
-    status TEXT NOT NULL                -- completed / shipped / pending / cancelled
+    order_date TEXT NOT NULL,           -- 下单日期 YYYY-MM-DD
+    status TEXT NOT NULL                -- 订单状态: completed / shipped / pending / cancelled
 );
-CREATE TABLE order_items (
+CREATE TABLE order_items (              -- 订单明细表：每单购买的商品、数量与成交单价
     id INTEGER PRIMARY KEY,
     order_id INTEGER NOT NULL REFERENCES orders(id),
     product_id INTEGER NOT NULL REFERENCES products(id),
-    quantity INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,          -- 购买数量
     unit_price REAL NOT NULL            -- 成交单价（可能有折扣，不等于 products.price）
 );
-CREATE TABLE payments (
+CREATE TABLE payments (                 -- 支付流水表：支付金额、支付方式、支付时间
     id INTEGER PRIMARY KEY,
     order_id INTEGER NOT NULL REFERENCES orders(id),
-    amount REAL NOT NULL,
-    method TEXT NOT NULL,               -- alipay / wechat / card
-    paid_at TEXT NOT NULL               -- YYYY-MM-DD
+    amount REAL NOT NULL,               -- 支付金额
+    method TEXT NOT NULL,               -- 支付方式: alipay / wechat / card
+    paid_at TEXT NOT NULL               -- 支付日期 YYYY-MM-DD
 );
 """
 
