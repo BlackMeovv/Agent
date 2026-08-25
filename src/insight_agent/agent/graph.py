@@ -29,6 +29,7 @@ from ..guard import validate
 from ..llm import BaseLLM, LLMError
 from ..tools.contract import QueryResult
 from ..tools.database import ReadOnlyDatabase
+from ..tracing import NOOP_TRACER, RunTrace, Tracer
 from . import prompts
 
 
@@ -74,6 +75,7 @@ class _State(TypedDict, total=False):
     status: str
     answer: str
     meter: Any  # UsageMeter（对象通道，就地累加）
+    trace: Any  # RunTrace（追踪句柄，未启用时为 no-op）
 
 
 _CODE_BLOCK = re.compile(r"```([a-zA-Z0-9_-]*)[ \t]*\n?(.*?)```", re.DOTALL)
@@ -102,10 +104,17 @@ def normalize_sql(sql: str) -> str:
 
 
 class InsightAgent:
-    def __init__(self, settings: Settings, db: ReadOnlyDatabase, llm: BaseLLM):
+    def __init__(
+        self,
+        settings: Settings,
+        db: ReadOnlyDatabase,
+        llm: BaseLLM,
+        tracer: Tracer | None = None,
+    ):
         self.settings = settings
         self.db = db
         self.llm = llm
+        self.tracer = tracer or NOOP_TRACER
         self._allowed_tables = set(db.table_names())
         self._schema_context = db.schema_text()
         self._graph = self._build_graph()
@@ -121,12 +130,14 @@ class InsightAgent:
             max_tokens=self.settings.agent_max_tokens_per_run,
             max_cost=self.settings.agent_max_cost_per_run,
         )
+        trace = self.tracer.start_run(question)
         state: _State = {
             "question": question,
             "schema_context": self._schema_context,
             "attempts": [],
             "generate_answer": generate_answer,
             "meter": meter,
+            "trace": trace,
         }
         try:
             # 每轮修复消耗 repair+execute 两个 superstep，上限必须跟随配置放大
@@ -150,6 +161,7 @@ class InsightAgent:
             usage=meter.snapshot(),
             latency_ms=int((time.monotonic() - start) * 1000),
         )
+        trace.end(status=outcome.status, output=outcome.answer, usage=outcome.usage)
         return outcome
 
     @staticmethod
@@ -199,6 +211,19 @@ class InsightAgent:
 
     # ---------- nodes ----------
 
+    def _trace(self, state: _State) -> RunTrace:
+        return state.get("trace") or RunTrace()
+
+    def _record_generation(self, state: _State, tag: str, messages: list[dict], reply) -> None:
+        self._trace(state).generation(
+            tag,
+            messages,
+            reply.text,
+            self.llm.model_name,
+            prompt_tokens=reply.prompt_tokens,
+            completion_tokens=reply.completion_tokens,
+        )
+
     def _node_generate_sql(self, state: _State) -> _State:
         messages = [
             {"role": "system", "content": prompts.SQL_SYSTEM},
@@ -215,6 +240,7 @@ class InsightAgent:
             return {"status": "budget_exceeded", "give_up_reason": "预算超限"}
         except LLMError as e:
             return {"status": "failed", "give_up_reason": f"LLM 调用失败: {e}"}
+        self._record_generation(state, "generate_sql", messages, reply)
         return {"candidate_sql": extract_sql(reply.text)}
 
     def _node_execute(self, state: _State) -> _State:
@@ -242,6 +268,17 @@ class InsightAgent:
                 error_message=result.error_message,
                 result=result,
             )
+        self._trace(state).span(
+            "execute",
+            metadata={
+                "sql": attempt.sql_final or attempt.sql_raw,
+                "ok": attempt.ok,
+                "error_kind": attempt.error_kind,
+                "error_message": attempt.error_message,
+                "row_count": attempt.result.row_count if attempt.result else None,
+                "latency_ms": attempt.result.latency_ms if attempt.result else None,
+            },
+        )
         return {"attempts": state["attempts"] + [attempt]}
 
     def _route_after_execute(self, state: _State) -> str:
@@ -281,6 +318,7 @@ class InsightAgent:
                 return {"status": "budget_exceeded", "give_up_reason": "预算超限"}
             except LLMError as e:
                 return {"status": "failed", "give_up_reason": f"LLM 调用失败: {e}"}
+            self._record_generation(state, "repair", messages, reply)
             candidate = extract_sql(reply.text)
             resent_last = normalize_sql(candidate) == normalize_sql(last.sql_raw)
             if resent_last and last.error_kind == "empty_result" and last.sql_final:
@@ -331,6 +369,7 @@ class InsightAgent:
         except (BudgetExceeded, LLMError):
             # 总结失败不影响查询本身的成功：降级为直接给数据预览
             return {"status": "ok", "answer": f"查询成功，结果如下：\n{last_ok.result.preview()}"}
+        self._record_generation(state, "answer", messages, reply)
         return {"status": "ok", "answer": reply.text.strip()}
 
     def _node_fallback(self, state: _State) -> _State:

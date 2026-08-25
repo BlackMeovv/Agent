@@ -48,10 +48,19 @@ make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 ## 评测
 
 - `eval/cases/smoke.jsonl`：20 条冒烟题（单表/连接/金额/多跳），每条带人工核验的 gold SQL
-- 指标：**执行准确率 EX**（与 BIRD/Spider 口径一致：比结果集不比 SQL 文本）
+- **公开基准**：`make bird-prepare` / `make bird` 一键接入 BIRD/Spider dev（见 [docs/benchmarks.md](docs/benchmarks.md)），子集固定 seed 抽样、gold 逐条执行校验
+- 指标：**执行准确率 EX**（与 BIRD/Spider 口径一致：比结果集不比 SQL 文本），
+  `--repeats 3` 重复跑分汇总为 **Wilson 95% 置信区间**；配置间对比用 **McNemar 配对检验**（`make report`）
 - 质量门禁：gold 必须过守卫、可执行、非空、自评满分（`tests/test_smoke_gold.py` 强制）；
   `--gold-replay` 离线回放不到 100% 即判定评测基建有 bug
 - CI：每次提交自动跑全部离线测试 + 评测自检
+
+## 可观测性
+
+在 [Langfuse Cloud](https://cloud.langfuse.com)（免费版即可）建项目拿到两个 key 填进 `.env`，
+再 `uv sync --extra trace`——之后每次提问的完整链路（每个节点的 SQL、错误分类、token、
+成本、延迟）都能在 Langfuse 网页上图形化查看，不需要自己写任何前端。
+未配置时追踪完全关闭，零开销。
 
 ## 项目文档
 
@@ -61,7 +70,7 @@ make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 ## Roadmap
 
 - [x] Week 1：最小闭环（生成 → 守卫 → 执行 → 自纠错）+ 冒烟评测集 + 离线测试
-- [ ] Week 2：BIRD/Spider 子集跑分、Langfuse 追踪、多次重复 + 置信区间统计
+- [x] Week 2：BIRD/Spider 基准接入、Langfuse 追踪、Wilson 置信区间 + McNemar 检验、消融对比报告
 - [ ] Week 3：Schema RAG（混合检索选表）、按错误类型的修复策略、防幻觉数字校验
 - [ ] Week 4：图表沙箱、FastAPI + SSE 流式服务、docker compose 一键部署
 - [ ] Week 5+：MCP server、跨会话记忆、200+ 条业务评测集、压测与监控大盘、多模型横评

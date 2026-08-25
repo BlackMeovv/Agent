@@ -1,4 +1,4 @@
-.PHONY: install demo-db test smoke smoke-gold ask schema
+.PHONY: install demo-db test smoke smoke-gold ask schema bird-prepare spider-prepare bird report
 
 install:            ## 安装依赖（含 dev）
 	uv sync --extra dev
@@ -20,3 +20,15 @@ ask:                ## 提问：make ask Q="上海的客户一共有多少个？
 
 schema:             ## 查看喂给模型的 schema 上下文
 	uv run insight-agent schema
+
+bird-prepare:       ## 转换 BIRD dev 子集：make bird-prepare ROOT=~/data/bird_dev
+	uv run python -m insight_agent.evalkit.prepare bird $(ROOT) --out eval/cases/bird-dev.jsonl --limit 150
+
+spider-prepare:     ## 转换 Spider dev 子集：make spider-prepare ROOT=~/data/spider
+	uv run python -m insight_agent.evalkit.prepare spider $(ROOT) --out eval/cases/spider-dev.jsonl --limit 150
+
+bird:               ## BIRD 跑分：make bird ROOT=~/data/bird_dev LABEL=baseline
+	uv run python -m insight_agent.evalkit.runner --cases eval/cases/bird-dev.jsonl --db-root $(ROOT) --repeats 3 --label $(LABEL)
+
+report:             ## 消融对比表：make report FILES="eval/results/a.json eval/results/b.json"
+	uv run python -m insight_agent.evalkit.report $(FILES) --out eval/results/report.md

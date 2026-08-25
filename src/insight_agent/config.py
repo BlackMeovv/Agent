@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # 数据库
     db_path: str = "data/demo/ecommerce.sqlite"
 
+    # Langfuse 追踪（选填；两个 key 都配置才启用，还需 `uv sync --extra trace`）
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
 
 @lru_cache
 def get_settings() -> Settings:

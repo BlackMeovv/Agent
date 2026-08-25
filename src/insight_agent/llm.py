@@ -41,6 +41,8 @@ def estimate_tokens(texts) -> int:
 
 
 class BaseLLM:
+    model_name: str = "unknown"
+
     def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "") -> LLMReply:
         raise NotImplementedError
 
@@ -53,6 +55,7 @@ class LLMClient(BaseLLM):
                 "离线场景请使用 MockLLM。"
             )
         self._settings = settings
+        self.model_name = settings.llm_model
         self._client = OpenAI(
             api_key=settings.llm_api_key,
             base_url=settings.llm_base_url,
@@ -109,6 +112,8 @@ class LLMClient(BaseLLM):
 
 class MockLLM(BaseLLM):
     """离线 mock：按脚本顺序吐回复。replies 用完后重复最后一条。"""
+
+    model_name = "mock"
 
     def __init__(self, replies: list[str]):
         if not replies:

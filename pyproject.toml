@@ -22,6 +22,9 @@ dev = [
     "pytest>=8.0",
     "pytest-timeout>=2.3",
 ]
+trace = [
+    "langfuse>=3.0",
+]
 
 [project.scripts]
 insight-agent = "insight_agent.cli:main"
