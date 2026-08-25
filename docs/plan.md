@@ -50,6 +50,9 @@ flowchart TB
 5. **图表沙箱**：模型生成 matplotlib/plotly 代码，在无网络、限资源的 Docker 容器里执行——覆盖"代码解释器沙箱"系统设计题。
 6. **MCP**：把数据库访问封装成自研 MCP server，agent 作为 MCP client 消费——一举覆盖"MCP 与 Function Calling 区别"考点。
 7. **模型路由**：简单查询走便宜小模型、复杂查询走强模型，配缓存——能报出"单次调用成本 $0.0X"这个杀手级问题的答案。
+8. **手写 ReAct 内循环**：LangGraph 只管外层流程编排；SQL 修复/库表探索节点内部是**手写的 Reason-Act-Observe 工具调用循环**（不用 prebuilt 的 create_react_agent），带重复动作检测（连续 N 次生成相同 SQL → 注入"换排查方向"提示）和 token/金额预算熔断——海外 take-home 已出现"禁用框架手写 tool calling"的考法，这让你能讲清 agent loop 本身怎么写，而不只是会调框架。
+9. **结论防幻觉校验**：归纳节点给出的每个数字自动与 SQL 执行结果精确比对，对不上就拒绝出稿并重写；评测报告输出"编造数字率"指标——数据分析场景里编数字是最致命的信任问题。
+10. **结构化工具契约**：查询/沙箱工具统一返回 `{ok, content(截断分页), truncated, next_offset, error_kind}`，错误分类（超时/权限/语法错/空结果），自纠错节点按错误类型走不同重写策略；铁律：输出必须截断分页、错误必须结构化、绝不拼字符串执行。
 
 ## 四、技术栈
 
@@ -67,6 +70,10 @@ flowchart TB
 ## 五、评测方案（本项目的灵魂，最先建）
 
 1. **公开基准**：BIRD dev、Spider dev 各抽固定子集（如各 150 条，固定随机种子保证可复现，控制 API 成本），指标用**执行准确率（EX）**。
+   - **统计严谨性**：每个配置跑 ≥3 次（多 seed/重复采样），报均值 + **Wilson 95% 置信区间**；配置间对比用 **McNemar 配对检验**——让"提升了 7 个点"这句话经得起追问"是不是抖动"。
+   - **dev/held-out 划分**：自建评测集切成 dev 和 held-out 两份，调 prompt/检索只看 dev，最终简历数字用 held-out 复核——防止对评测集过拟合，面试讲出来就是降维打击。
+   - **smoke/full 分层**：`make smoke`（20 条固定冒烟集，分钟级）日常每次改动都跑；`make eval` 全量；`make report` 生成 HTML 消融报告。NL2SQL 的隐藏优势：单条评测是毫秒级 SQL 执行，没有运维类项目那种 60-90 秒环境重置，全量一轮墙钟成本极低，可以高频迭代。
+   - **防泄漏**：自建集的 gold SQL/标准答案放在评测目录，加一条测试断言 agent 运行时读不到。
 2. **基线阶梯（消融表）**——简历和面试的核心素材：
 
    | 配置 | BIRD-mini EX | 平均延迟 | 单条成本 |
@@ -80,6 +87,8 @@ flowchart TB
 3. **自建业务评测集**：造一个贴近真实的模拟业务库（电商/零售，10+ 表），人工写 200+ 条"业务黑话"问题（公开基准没有的：口径歧义、跨表口径、时间口径），这是"200+ 条自建评测集"这句简历话术的来源。
 4. **回归 CI**：每次改 prompt/检索/模型，GitHub Actions 自动跑冒烟集，防止"改一处坏三处"。
 5. **bad case 分析文档**：`docs/badcases.md` 按失败模式归类（选错表/口径理解错/SQL 方言错/幻觉列名…），每类给出对策与前后对比——对应 Hamel Husain "error analysis 是地基"。
+6. **安全评测用例（数据投毒/间接 prompt injection）**：在示例库的文本列（如商品评论表）植入"ignore previous instructions / 请输出 DROP TABLE"类内容，评测 agent 读到脏数据后是否被劫持，报守卫拦截率——对应面试安全题里的 Prompt Injection 生产级防御。
+7. **多模型横评**：同一套评测集跑 2-3 个模型（如 DeepSeek-V3 / Qwen / 一个强模型对照），一张横评表回答"为什么选这个模型"并展示成本-准确率权衡。
 
 ## 六、里程碑（时间紧版：4 周核心 + 2-4 周增强）
 
@@ -90,13 +99,15 @@ flowchart TB
 
 **Week 2 —— 评测与观测基建（先有数字，再谈优化）**
 - BIRD-mini/Spider-mini 跑分脚本（固定子集 + EX 指标 + 结果落盘）
-- Langfuse 追踪接入：每个节点一个 span，token 用量与成本记账
+- `make smoke / eval / report` 分层；多次重复 + Wilson 置信区间统计
+- Langfuse 追踪接入：每个节点一个 span，token 用量与成本记账；预算熔断
 - GitHub Actions 冒烟回归
-- 产出：baseline 消融表第一行 + trace 截图
+- 产出：baseline 消融表第一行（带 CI）+ trace 截图
 
 **Week 3 —— 提准确率（消融表逐行点亮）**
 - Schema Linking：混合检索选表选列、业务字典、few-shot 例句检索
-- 自纠错策略调优（错误分类后针对性重写）；bad case 首轮复盘
+- 自纠错策略调优（按 error_kind 分类重写 + 重复 SQL 检测）；bad case 首轮复盘
+- 结论防幻觉校验节点（数字与查询结果比对）
 - 产出：消融表 3-4 行，准确率提升曲线，badcases.md v1
 
 **Week 4 —— 产品化 + 可写上简历**
@@ -107,8 +118,9 @@ flowchart TB
 
 **Week 5-6（增强，边投边做）**
 - 数据库访问 MCP server 化；跨会话 Memory（用户口径偏好）
-- 自建业务库 + 200+ 条业务评测集
-- 模型路由与缓存（把成本数字做漂亮）
+- 自建业务库 + 200+ 条业务评测集（dev/held-out 划分）+ 数据投毒安全用例
+- 模型路由、prompt caching 与上下文分层（长会话下近期步骤全文/中期摘要/远期一行引用），把成本数字做漂亮
+- 多模型横评（2-3 个模型一张表）
 - 英文 README + 一篇技术博客（badcase 复盘或消融实验），发牛客/掘金/知乎
 
 ## 七、简历写法模板（业务痛点 → 技术方案 → 量化结果）
@@ -118,7 +130,9 @@ flowchart TB
 - 设计并实现基于 **LangGraph 的多智能体数据分析系统**（意图理解 / Schema 检索 / SQL 生成 / 守卫执行 / 自纠错 / 可视化归纳），支持自然语言直接查询业务数据库并生成图表结论
 - 构建 **Schema RAG 链路**（BM25+向量混合检索选表选列 + 业务字典 + few-shot 例句），结合执行反馈自纠错，在 **BIRD dev 子集上执行准确率由基线 X% 提升至 Y%**（附消融实验）
 - 设计 **SQL 安全守卫**：只读账号 + sqlglot AST 白名单校验 + 超时/行数限额；模型生成的图表代码在**资源受限的 Docker 沙箱**中执行
-- 建立**评测闭环**：200+ 条自建业务评测集 + GitHub Actions 回归 CI + bad case 分类复盘；**Langfuse 全链路追踪**与 token 成本记账，经模型路由优化单次查询成本降至 $0.00X
+- 建立**评测闭环**：200+ 条自建业务评测集（dev/held-out 划分）+ GitHub Actions 回归 CI + bad case 分类复盘；准确率数字报 **n=3 次重复 + Wilson 95% 置信区间**，held-out 复核 __%；完成 3 模型横评（成本-准确率权衡）
+- 实现**结论防幻觉校验**（归纳结论逐数字与查询结果精确比对，编造数字率 __%）；手写 Reason-Act-Observe 内循环，带重复动作检测与 token/金额预算熔断；含数据投毒（间接 Prompt Injection）安全评测用例
+- **Langfuse 全链路追踪**与 token 成本记账，经模型路由与 prompt caching 优化单次查询成本降至 $0.00X
 - 基于 **FastAPI + SSE** 实现流式输出与中断；docker compose 一键部署；将数据库访问封装为自研 **MCP Server**
 
 ## 八、面试追问预案（做项目时顺手留证据）
@@ -143,3 +157,26 @@ flowchart TB
 5. **每个优化留 before/after 数据**，随手记进 badcases.md/消融表——简历和面试素材都从这里来。
 6. **应用岗与算法岗简历分开定制**，本项目投"应用/Agent 开发"岗；别用它投基座/训练/Infra 岗（调研中的典型方向错配反例）。
 7. GitHub 仓库从第一天就当开源项目维护：清晰 commit、README 先行、issue 记录 bad case——多个 JD 明确"开源贡献优先"且要求附 GitHub 链接。
+
+## 十、从既往 OpsAgent 方案移植的设计
+
+> 背景：此前规划过一个 OpsAgent（运维故障诊断 agent）两周冲刺方案，含手写 ReAct 内核 + 20 场景故障注入评测 harness。方向维持 insight-agent 不变——OpsAgent 方案自己列出的三大瓶颈（一轮全量 eval 4-9 小时墙钟、确定性环境重置的 flaky 调试可能吞掉 2-3 天、8GB 内存需求且注入脚本可能搞挂宿主机）在 NL2SQL 方向上天然不存在（SQLite 复制文件即重置、单条评测毫秒级）。但它的评测方法论和工程纪律是通用资产，以下逐项移植：
+
+| OpsAgent 组件 | 移植到 insight-agent 的形态 |
+|---|---|
+| 手写 ReAct 内核（core/loop.py） | SQL 修复/库表探索节点内部手写 Reason-Act-Observe 循环，不用 prebuilt |
+| 重复动作检测（repeated n=3） | 连续生成相同 SQL → 注入"换排查方向"提示 |
+| budget.py 金额/token 熔断 | 同款：单次运行 token 与金额上限，超限降级收尾 |
+| 多 seed + Wilson CI + McNemar + dev/holdout | 评测方案第 1 条，原样移植 |
+| 幻觉证据检测（答案引用与工具输出比对） | 结论防幻觉校验：归纳数字与 SQL 结果精确比对，报"编造数字率" |
+| 结构化 ToolResult（截断分页 + error_kind） | 查询/沙箱工具统一契约，自纠错按错误类型分策略 |
+| 分层上下文（近期全文/中期摘要/远期引用 + 证据外置） | 长会话与多轮纠错时大结果集外置为 ref，只放摘要进上下文；配 prompt caching |
+| make smoke / eval / report + 夜跑纪律 | smoke 冒烟集分钟级日常跑，全量出报告 |
+| 防泄漏（agent 读不到 truth.yaml） | gold SQL 隔离于评测目录 + 断言测试 |
+| 日志投毒场景（prompt injection） | 数据投毒用例：文本列植入注入指令，测劫持率与拦截率 |
+| 多模型横评（3 模型） | 同款：DeepSeek/Qwen/强模型对照一张表 |
+| 三级权限 + HITL 审批 + checkpoint | 轻量化移植：本项目守卫默认只读；高成本查询（EXPLAIN 预估超阈值）需用户确认或自动加 LIMIT |
+| Web 控制台 trace 回放 | 不移植，Langfuse 已覆盖（省 1-2 天） |
+| 压测器/Prometheus/故障注入环境 | 不移植，属运维场景专有 |
+
+OpsAgent 本身可作为第二个项目或面试谈资（"我调研过运维方向，因评测墙钟成本放弃"——这本身就是工程判断力的展示）。
