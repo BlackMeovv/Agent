@@ -111,21 +111,26 @@ class LLMClient(BaseLLM):
 
 
 class MockLLM(BaseLLM):
-    """离线 mock：按脚本顺序吐回复。replies 用完后重复最后一条。"""
+    """离线 mock：按脚本顺序吐回复。replies 用完后重复最后一条；
+    cycle=True 则循环整个列表（服务 mock 模式/压测用）。"""
 
     model_name = "mock"
 
-    def __init__(self, replies: list[str]):
+    def __init__(self, replies: list[str], cycle: bool = False):
         if not replies:
             raise ValueError("MockLLM 至少需要一条回复")
         self._replies = list(replies)
+        self._cycle = cycle
         self._i = 0
         self.calls: list[list[dict]] = []
 
     def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "") -> LLMReply:
         meter.check()
         self.calls.append(messages)
-        text = self._replies[min(self._i, len(self._replies) - 1)]
+        if self._cycle:
+            text = self._replies[self._i % len(self._replies)]
+        else:
+            text = self._replies[min(self._i, len(self._replies) - 1)]
         self._i += 1
         # 与真实客户端的无 usage 兜底同源，保证预算熔断在离线路径同样可测
         prompt_tokens = estimate_tokens(str(m.get("content", "")) for m in messages)

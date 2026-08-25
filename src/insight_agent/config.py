@@ -43,6 +43,24 @@ class Settings(BaseSettings):
     # 回答防幻觉数字校验
     answer_verify: bool = True
 
+    # 图表沙箱：docker（生产）/ subprocess（开发兜底）/ auto（有 docker 用 docker）
+    chart_executor: str = "auto"
+    chart_image: str = "insight-agent-chart"
+    chart_timeout_seconds: float = 20
+    chart_out_dir: str = "data/charts"
+
+    # 服务
+    server_host: str = "0.0.0.0"
+    server_port: int = 8000
+    # 结果缓存：redis://host:6379/0；不配置则用进程内 LRU
+    redis_url: str = ""
+    cache_ttl_seconds: int = 600
+    # 压测/演示用 mock 模式：不调真实 LLM（回答固定套路 SQL），绝不能用于评测
+    llm_mock: bool = False
+
+    # 跨会话记忆
+    memory_db_path: str = "data/memory.sqlite"
+
     # SQL 守卫
     sql_timeout_seconds: float = 15
     sql_max_rows: int = 200

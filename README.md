@@ -30,6 +30,40 @@ make ask Q="下单次数最多的前5名客户是谁？"
 
 # 5. 跑冒烟评测（20 题，报执行准确率/成本/延迟）
 make smoke
+
+# 6. 起服务（SSE 流式网页 http://localhost:8000 + /metrics）
+make serve
+
+# 或者 docker compose 一键起全套（服务+Redis+Prometheus+Grafana 大盘）
+docker compose up --build
+```
+
+## 接入你自己的数据库
+
+agent 与具体数据库**完全解耦**：schema 是连接时运行时自省的（建表语句+样例行），
+守卫白名单、检索索引都由所连的库派生，没有任何针对演示库的硬编码。换库只需：
+
+```bash
+insight-agent ask "任意问题" --db /path/to/your.sqlite   # 临时切换
+# 或在 .env 里改 DB_PATH，服务/评测全部跟随
+```
+
+内置电商演示库只是让仓库开箱即跑的样例数据；跑 BIRD 基准时 agent 会在
+几十个从未见过的第三方库上逐题切换（`--db-root`），这本身就是泛化能力的证明。
+MySQL/Postgres 接入在 Roadmap（sqlglot 方言转换 + 只读账号，守卫层已按方言参数化设计）。
+
+## 其他入口
+
+```bash
+# MCP server：接入 Claude Desktop / Claude Code 等任意 MCP 客户端
+uv sync --extra mcp && uv run insight-agent-mcp
+
+# 跨会话记忆：记住你的口径偏好（按用户隔离）
+insight-agent remember "我说的销售额一律指已完成订单的成交金额"
+insight-agent ask "这个月销售额多少？" --chart    # --chart 生成沙箱图表
+
+# 压测（服务端先用 LLM_MOCK=1 起，测工程链路吞吐，不花模型钱）
+locust -f eval/load/locustfile.py --host http://localhost:8000
 ```
 
 不配置 API 也可以完整验证工程链路：
@@ -74,5 +108,6 @@ make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 - [x] Week 1：最小闭环（生成 → 守卫 → 执行 → 自纠错）+ 冒烟评测集 + 离线测试
 - [x] Week 2：BIRD/Spider 基准接入、Langfuse 追踪、Wilson 置信区间 + McNemar 检验、消融对比报告
 - [x] Week 3：Schema RAG（BM25+向量混合检索选表 + 选表召回率指标）、业务字典/few-shot 例句注入、按错误类型的修复提示、防幻觉数字校验
-- [ ] Week 4：图表沙箱、FastAPI + SSE 流式服务、docker compose 一键部署
-- [ ] Week 5+：MCP server、跨会话记忆、200+ 条业务评测集、压测与监控大盘、多模型横评
+- [x] Week 4：图表沙箱（Docker/子进程双执行器 + 静态拒绝清单）、FastAPI + SSE 流式服务与演示网页、docker compose 一键部署
+- [x] Week 5+：MCP server、跨会话记忆、236 条自建业务评测集（dev/holdout）、Redis 结果缓存、Prometheus/Grafana 大盘、locust 压测脚本
+- [ ] 待办：跑真实模型基线与消融（需 API Key）、多模型横评数据、MySQL/Postgres 方言适配

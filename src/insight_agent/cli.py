@@ -19,11 +19,26 @@ from rich.text import Text
 console = Console()
 
 
+def _override_db(args: argparse.Namespace):
+    """--db 指定任意 SQLite 文件：agent 与库完全解耦，schema 是运行时自省的。"""
+    from .config import get_settings
+
+    settings = get_settings()
+    if getattr(args, "db", None):
+        settings = settings.model_copy(update={"db_path": args.db})
+    return settings
+
+
 def _cmd_ask(args: argparse.Namespace) -> int:
     from . import build_agent
 
-    agent = build_agent()
-    outcome = agent.ask(args.question, generate_answer=not args.no_answer)
+    agent = build_agent(_override_db(args))
+    outcome = agent.ask(
+        args.question,
+        generate_answer=not args.no_answer,
+        generate_chart=args.chart,
+        user_id=args.user,
+    )
 
     # 模型/数据库产出的文本都是不受信内容，必须 escape/Text 后再交给 rich 渲染
     if args.trace:
@@ -44,6 +59,10 @@ def _cmd_ask(args: argparse.Namespace) -> int:
             console.print(f"（共 {outcome.result.row_count} 行，仅展示前 20 行）")
     if outcome.answer:
         console.print(Panel(Text(outcome.answer), title="回答", border_style="green"))
+    if outcome.chart_path:
+        console.print(f"图表已生成: [cyan]{escape(outcome.chart_path)}[/cyan]")
+    elif args.chart and outcome.chart_error:
+        console.print(f"[yellow]图表生成失败：[/yellow]{escape(outcome.chart_error)}")
 
     usage = outcome.usage
     console.print(
@@ -54,11 +73,10 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     return 0 if outcome.succeeded else 1
 
 
-def _cmd_schema(_args: argparse.Namespace) -> int:
-    from .config import get_settings
+def _cmd_schema(args: argparse.Namespace) -> int:
     from .tools.database import ReadOnlyDatabase
 
-    settings = get_settings()
+    settings = _override_db(args)
     db = ReadOnlyDatabase(settings.db_path)
     console.print(db.schema_text())
     return 0
@@ -72,6 +90,42 @@ def _cmd_demo_db(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(_args: argparse.Namespace) -> int:
+    from .server import main as serve_main
+
+    serve_main()
+    return 0
+
+
+def _memory_store():
+    from .config import get_settings
+    from .memory import MemoryStore
+
+    return MemoryStore(get_settings().memory_db_path)
+
+
+def _cmd_remember(args: argparse.Namespace) -> int:
+    note_id = _memory_store().remember(args.user, args.note)
+    console.print(f"已记住（#{note_id}）：{escape(args.note)}")
+    return 0
+
+
+def _cmd_memories(args: argparse.Namespace) -> int:
+    rows = _memory_store().notes(args.user)
+    if not rows:
+        console.print("（暂无记忆）")
+        return 0
+    for note_id, note, created_at in rows:
+        console.print(f"#{note_id} [{created_at}] {escape(note)}")
+    return 0
+
+
+def _cmd_forget(args: argparse.Namespace) -> int:
+    ok = _memory_store().forget(args.user, args.note_id)
+    console.print("已删除" if ok else "[yellow]未找到该记忆[/yellow]")
+    return 0 if ok else 1
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="insight-agent", description="企业数据分析 Agent")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -80,13 +134,34 @@ def main() -> None:
     ask.add_argument("question")
     ask.add_argument("--trace", action="store_true", help="展示每一次尝试的 SQL 与错误")
     ask.add_argument("--no-answer", action="store_true", help="跳过总结节点（只要 SQL 和数据）")
+    ask.add_argument("--chart", action="store_true", help="生成图表（模型写代码 → 沙箱执行）")
+    ask.add_argument("--user", default="default", help="用户标识（跨会话记忆按用户隔离）")
+    ask.add_argument("--db", default=None, help="连接任意 SQLite 库文件（默认 .env 的 DB_PATH）")
     ask.set_defaults(func=_cmd_ask)
 
     schema = sub.add_parser("schema", help="查看喂给模型的 schema 上下文")
+    schema.add_argument("--db", default=None, help="连接任意 SQLite 库文件")
     schema.set_defaults(func=_cmd_schema)
 
     demo = sub.add_parser("demo-db", help="生成演示数据库")
     demo.set_defaults(func=_cmd_demo_db)
+
+    serve = sub.add_parser("serve", help="启动 FastAPI 服务（SSE + 演示网页 + /metrics）")
+    serve.set_defaults(func=_cmd_serve)
+
+    remember = sub.add_parser("remember", help='记住口径偏好：remember "销售额一律指已完成订单的成交金额"')
+    remember.add_argument("note")
+    remember.add_argument("--user", default="default")
+    remember.set_defaults(func=_cmd_remember)
+
+    memories = sub.add_parser("memories", help="列出记忆")
+    memories.add_argument("--user", default="default")
+    memories.set_defaults(func=_cmd_memories)
+
+    forget = sub.add_parser("forget", help="删除一条记忆：forget <id>")
+    forget.add_argument("note_id", type=int)
+    forget.add_argument("--user", default="default")
+    forget.set_defaults(func=_cmd_forget)
 
     args = parser.parse_args()
     try:

@@ -32,3 +32,12 @@ bird:               ## BIRD 跑分：make bird ROOT=~/data/bird_dev LABEL=baseli
 
 report:             ## 消融对比表：make report FILES="eval/results/a.json eval/results/b.json"
 	uv run python -m insight_agent.evalkit.report $(FILES) --out eval/results/report.md
+
+business-set:       ## 重新生成自建业务评测集（dev/holdout）
+	uv run python -m insight_agent.evalkit.business_set
+
+business:           ## 业务集跑分：make business LABEL=baseline
+	uv run python -m insight_agent.evalkit.runner --cases eval/cases/business-dev.jsonl --repeats 3 --label $(LABEL)
+
+serve:              ## 启动服务（网页 http://localhost:8000）
+	uv run insight-agent serve

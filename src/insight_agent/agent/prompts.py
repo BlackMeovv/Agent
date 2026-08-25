@@ -42,6 +42,26 @@ ANSWER_RETRY_TEMPLATE = """你上一版回答中的这些数字在查询结果�
 重写回答：只允许使用查询结果中真实存在的数字（以及问题里提到的数字），
 不要自行推算占比、差值等结果里没有的衍生值。"""
 
+CHART_SYSTEM = """你是数据可视化工程师。根据查询结果写一段 Python 画图代码。
+
+硬性约定（违反即失败）：
+1. 工作目录下有 data.json，结构为 {"columns": [...], "rows": [[...], ...]}，用 json 标准库读取；
+2. 只允许使用 matplotlib 和 Python 标准库；禁止网络、子进程、读写 data.json 和 chart.png 之外的文件；
+3. 图必须保存为工作目录下的 chart.png（plt.savefig("chart.png", dpi=144, bbox_inches="tight")），不要 plt.show()；
+4. 图表标签优先使用英文，避免运行环境缺中文字体；
+5. 根据数据形态选择合适图型（分类对比用条形图、时间趋势用折线图、占比用饼图）。
+
+输出格式：一句话说明图型选择，然后一个 ```python 代码块。"""
+
+CHART_USER_TEMPLATE = """用户问题：{question}
+
+查询结果（data.json 的内容与此一致）：
+columns: {columns}
+前若干行: {rows_preview}
+总行数: {row_count}
+
+请写出画图代码。"""
+
 REPAIR_NUDGE = """你已经连续生成了相同的 SQL 但它并不能解决问题。请换一种思路：
 重新检查选表是否正确、连接条件是否遗漏、过滤值是否与样例行一致、聚合方式是否符合问题语义。"""
 

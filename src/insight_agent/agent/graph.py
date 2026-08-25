@@ -28,6 +28,7 @@ from ..config import Settings
 from ..guard import validate
 from ..llm import BaseLLM, LLMError
 from ..retrieval import SchemaRetriever, build_embedder, load_examples, load_glossary
+from ..sandbox import build_sandbox
 from ..tools.contract import QueryResult
 from ..tools.database import ReadOnlyDatabase
 from ..tracing import NOOP_TRACER, RunTrace, Tracer
@@ -58,6 +59,8 @@ class RunOutcome:
     predicted_sql: str | None = None  # 模型原始 SQL（评测打分用）
     selected_tables: list[str] | None = None  # Schema RAG 选中的表（未启用时为 None）
     hallucination_blocked: bool = False  # 回答因数字无出处被拦截降级
+    chart_path: str | None = None  # 沙箱生成的图表文件（未请求/失败时为 None）
+    chart_error: str | None = None
     result: QueryResult | None = None
     attempts: list[Attempt] = field(default_factory=list)
     usage: dict = field(default_factory=dict)
@@ -73,6 +76,9 @@ class _State(TypedDict, total=False):
     schema_context: str
     candidate_sql: str  # 待执行的 SQL（generate/repair 产出）
     generate_answer: bool  # 是否生成总结回答（评测时关掉省成本）
+    generate_chart: bool  # 是否生成图表（沙箱执行）
+    chart_path: str | None
+    chart_error: str | None
     attempts: list[Attempt]
     accept_empty: bool  # repair 确认空结果为最终答案
     give_up_reason: str
@@ -108,6 +114,25 @@ def normalize_sql(sql: str) -> str:
     return re.sub(r"\s+", " ", (sql or "").strip().rstrip(";")).lower()
 
 
+def extract_code(text: str, langs: tuple[str, ...] = ("python", "py")) -> str:
+    """提取代码块：优先匹配语言标签，其次第一个非空块，最后整段文本。"""
+    blocks = [(lang.lower(), body.strip()) for lang, body in _CODE_BLOCK.findall(text or "")]
+    for lang, body in blocks:
+        if lang in langs and body:
+            return body
+    for _lang, body in blocks:
+        if body:
+            return body
+    return (text or "").strip()
+
+
+# 图表代码静态拒绝清单：真正的隔离靠沙箱，这是廉价的第一道筛
+_CHART_CODE_DENY = re.compile(
+    r"\b(subprocess|socket|urllib|requests|http\.client|ftplib|ctypes|importlib|"
+    r"__import__|eval\s*\(|exec\s*\(|os\.(system|popen|exec\w*|spawn\w*|remove|unlink|rmdir))"
+)
+
+
 class InsightAgent:
     def __init__(
         self,
@@ -115,7 +140,9 @@ class InsightAgent:
         db: ReadOnlyDatabase,
         llm: BaseLLM,
         tracer: Tracer | None = None,
+        memory=None,  # MemoryStore | None：跨会话用户口径记忆
     ):
+        self.memory = memory
         self.settings = settings
         self.db = db
         self.llm = llm
@@ -126,9 +153,12 @@ class InsightAgent:
         self._retriever = SchemaRetriever(self._table_docs, embedder=build_embedder(settings))
         self._glossary = load_glossary(settings.glossary_path)
         self._examples = load_examples(settings.examples_path)
+        self._sandbox = None  # 图表沙箱按需构建
         self._graph = self._build_graph()
 
-    def _build_schema_context(self, question: str) -> tuple[str, list[str] | None]:
+    def _build_schema_context(
+        self, question: str, user_id: str = "default"
+    ) -> tuple[str, list[str] | None]:
         """按问题组装 schema 上下文。
 
         大库不能全量塞 prompt（贵且触发 Lost in the Middle）——auto 模式下
@@ -151,13 +181,71 @@ class InsightAgent:
         example_hits = self._examples.top(question, top_n)
         if example_hits:
             context += "\n\n相似问题参考：\n" + "\n\n".join(e.body for e in example_hits)
+        if self.memory is not None:
+            memory_hits = self.memory.recall(user_id, question, top_n)
+            if memory_hits:
+                context += "\n\n该用户的口径偏好（跨会话记忆，优先遵循）：\n" + "\n".join(
+                    f"- {m}" for m in memory_hits
+                )
         return context, selected
 
     # ---------- public ----------
 
-    def ask(self, question: str, generate_answer: bool = True) -> RunOutcome:
-        """回答一个自然语言问题。generate_answer=False 时跳过总结节点（评测省成本）。"""
+    def ask(
+        self,
+        question: str,
+        generate_answer: bool = True,
+        generate_chart: bool = False,
+        user_id: str = "default",
+    ) -> RunOutcome:
+        """回答一个自然语言问题。generate_answer=False 时跳过总结节点（评测省成本）；
+        generate_chart=True 时对成功结果生成图表（模型写代码 → 沙箱执行）。"""
         start = time.monotonic()
+        state, meter, trace, selected_tables = self._prepare_run(
+            question, generate_answer, generate_chart, user_id
+        )
+        try:
+            final: dict = self._graph.invoke(state, config=self._run_config())
+        except GraphRecursionError:
+            final = {"attempts": [], "status": "failed", "answer": "内部编排步数超限，已终止。"}
+        return self._finish_run(question, final, meter, trace, selected_tables, start)
+
+    def ask_stream(
+        self,
+        question: str,
+        generate_answer: bool = True,
+        generate_chart: bool = False,
+        user_id: str = "default",
+    ):
+        """逐节点流式执行（服务端 SSE 用）。
+
+        依次 yield ("node", 节点名, 增量状态)，最后 yield ("final", RunOutcome, None)。
+        """
+        start = time.monotonic()
+        state, meter, trace, selected_tables = self._prepare_run(
+            question, generate_answer, generate_chart, user_id
+        )
+        final_state: dict = dict(state)
+        try:
+            for update in self._graph.stream(state, config=self._run_config(), stream_mode="updates"):
+                for node, delta in update.items():
+                    if delta:
+                        final_state.update(delta)
+                    yield ("node", node, delta or {})
+        except GraphRecursionError:
+            final_state.update({"status": "failed", "answer": "内部编排步数超限，已终止。"})
+        outcome = self._finish_run(question, final_state, meter, trace, selected_tables, start)
+        yield ("final", outcome, None)
+
+    # ---------- run plumbing ----------
+
+    def _run_config(self) -> dict:
+        # 每轮修复消耗 repair+execute 两个 superstep，上限必须跟随配置放大
+        return {"recursion_limit": 2 * self.settings.agent_max_repair_rounds + 12}
+
+    def _prepare_run(
+        self, question: str, generate_answer: bool, generate_chart: bool, user_id: str = "default"
+    ):
         meter = UsageMeter(
             price_input_per_m=self.settings.llm_price_input_per_m,
             price_output_per_m=self.settings.llm_price_output_per_m,
@@ -165,7 +253,7 @@ class InsightAgent:
             max_cost=self.settings.agent_max_cost_per_run,
         )
         trace = self.tracer.start_run(question)
-        schema_context, selected_tables = self._build_schema_context(question)
+        schema_context, selected_tables = self._build_schema_context(question, user_id=user_id)
         if selected_tables is not None:
             trace.span("schema_rag", metadata={"selected_tables": selected_tables})
         state: _State = {
@@ -173,17 +261,21 @@ class InsightAgent:
             "schema_context": schema_context,
             "attempts": [],
             "generate_answer": generate_answer,
+            "generate_chart": generate_chart,
             "meter": meter,
             "trace": trace,
         }
-        try:
-            # 每轮修复消耗 repair+execute 两个 superstep，上限必须跟随配置放大
-            final = self._graph.invoke(
-                state,
-                config={"recursion_limit": 2 * self.settings.agent_max_repair_rounds + 12},
-            )
-        except GraphRecursionError:
-            final = {"attempts": [], "status": "failed", "answer": "内部编排步数超限，已终止。"}
+        return state, meter, trace, selected_tables
+
+    def _finish_run(
+        self,
+        question: str,
+        final: dict,
+        meter: UsageMeter,
+        trace: RunTrace,
+        selected_tables: list[str] | None,
+        start: float,
+    ) -> RunOutcome:
         attempts: list[Attempt] = final.get("attempts", [])
         last_ok = next((a for a in reversed(attempts) if a.ok), None)
         executed_sql, raw_sql = self._pick_final(final, attempts, last_ok)
@@ -195,6 +287,8 @@ class InsightAgent:
             predicted_sql=raw_sql,
             selected_tables=selected_tables,
             hallucination_blocked=final.get("hallucination_blocked", False),
+            chart_path=final.get("chart_path"),
+            chart_error=final.get("chart_error"),
             result=last_ok.result if last_ok else None,
             attempts=attempts,
             usage=meter.snapshot(),
@@ -225,6 +319,7 @@ class InsightAgent:
         g.add_node("generate_sql", self._node_generate_sql)
         g.add_node("execute", self._node_execute)
         g.add_node("repair", self._node_repair)
+        g.add_node("chart", self._node_chart)
         g.add_node("summarize", self._node_answer)
         g.add_node("fallback", self._node_fallback)
 
@@ -237,8 +332,9 @@ class InsightAgent:
         g.add_conditional_edges(
             "execute",
             self._route_after_execute,
-            {"answer": "summarize", "repair": "repair", "fallback": "fallback"},
+            {"answer": "summarize", "chart": "chart", "repair": "repair", "fallback": "fallback"},
         )
+        g.add_edge("chart", "summarize")
         g.add_conditional_edges(
             "repair",
             self._route_after_repair,
@@ -325,7 +421,7 @@ class InsightAgent:
             return "fallback"
         last = state["attempts"][-1]
         if last.ok:
-            return "answer"
+            return "chart" if state.get("generate_chart") else "answer"
         meter: UsageMeter = state["meter"]
         if meter.exceeded():
             return "fallback"
@@ -386,6 +482,55 @@ class InsightAgent:
         if state.get("give_up_reason"):
             return "fallback"
         return "execute"
+
+    def _node_chart(self, state: _State) -> _State:
+        """图表节点：模型写 matplotlib 代码 → 静态拒绝清单初筛 → 沙箱执行。
+        失败只记录 chart_error，不影响查询与回答。"""
+        attempts = state["attempts"]
+        last_ok = next((a for a in reversed(attempts) if a.ok), None)
+        if last_ok is None or last_ok.result is None:
+            return {"chart_error": "没有可用的查询结果"}
+        result = last_ok.result
+
+        messages = [
+            {"role": "system", "content": prompts.CHART_SYSTEM},
+            {
+                "role": "user",
+                "content": prompts.CHART_USER_TEMPLATE.format(
+                    question=state["question"],
+                    columns=result.columns,
+                    rows_preview=result.preview(max_rows=8),
+                    row_count=result.row_count,
+                ),
+            },
+        ]
+        try:
+            reply = self.llm.chat(messages, state["meter"], tag="chart")
+        except (BudgetExceeded, LLMError) as e:
+            return {"chart_error": f"图表代码生成失败: {e}"}
+        self._record_generation(state, "chart", messages, reply)
+
+        code = extract_code(reply.text)
+        denied = _CHART_CODE_DENY.search(code)
+        if denied:
+            self._trace(state).span("chart_code_rejected", metadata={"pattern": denied.group(0)})
+            return {"chart_error": f"图表代码包含被禁止的调用（{denied.group(0)}），已拒绝执行"}
+
+        if self._sandbox is None:
+            self._sandbox = build_sandbox(self.settings)
+        data = {"columns": result.columns, "rows": [list(row) for row in result.rows]}
+        sandbox_result = self._sandbox.run(code, data, self.settings.chart_out_dir)
+        self._trace(state).span(
+            "chart_sandbox",
+            metadata={
+                "executor": self._sandbox.name,
+                "ok": sandbox_result.ok,
+                "error": sandbox_result.error,
+            },
+        )
+        if not sandbox_result.ok:
+            return {"chart_error": sandbox_result.error}
+        return {"chart_path": sandbox_result.chart_path}
 
     def _node_answer(self, state: _State) -> _State:
         attempts = state["attempts"]
