@@ -44,7 +44,8 @@ class TestBasics:
 
     def test_index_page(self, client):
         resp = client.get("/")
-        assert resp.status_code == 200 and "insight-agent" in resp.text
+        assert resp.status_code == 200 and "InsightAgent" in resp.text
+        assert "执行日志" in resp.text  # 生产控制台式布局的关键区块
 
     def test_metrics(self, client):
         client.get("/api/ask", params={"question": "上海的客户一共有多少个？"})

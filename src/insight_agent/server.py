@@ -114,7 +114,19 @@ def create_app(agent: InsightAgent | None = None, settings: Settings | None = No
 
     @app.get("/healthz")
     def healthz():
-        return {"ok": True, "cache": cache.backend, "mock": settings.llm_mock}
+        db_target = settings.db_path
+        if "://" in db_target:  # 连接串脱敏：只露引擎与库名
+            scheme, rest = db_target.split("://", 1)
+            db_target = f"{scheme}://…/{rest.rsplit('/', 1)[-1]}"
+        else:
+            db_target = Path(db_target).name
+        return {
+            "ok": True,
+            "cache": cache.backend,
+            "mock": settings.llm_mock,
+            "db": db_target,
+            "model": "mock" if settings.llm_mock else settings.llm_model,
+        }
 
     @app.get("/metrics")
     def metrics():
@@ -198,82 +210,299 @@ PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>insight-agent</title>
+<title>InsightAgent · 数据查询台</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; }
-  h1 { font-size: 1.3rem; }
-  #bar { display: flex; gap: .5rem; }
-  #q { flex: 1; padding: .6rem .8rem; font-size: 1rem; border: 1px solid #8884; border-radius: 8px; }
-  button { padding: .6rem 1.2rem; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font-size: 1rem; cursor: pointer; }
-  button:disabled { opacity: .5; }
-  label { font-size: .9rem; align-self: center; user-select: none; }
-  #steps { margin: 1rem 0 0; padding: 0; list-style: none; font-size: .9rem; opacity: .85; }
-  #steps li { padding: .15rem 0; }
-  pre { background: #8881; padding: .8rem; border-radius: 8px; overflow-x: auto; }
-  table { border-collapse: collapse; margin: .8rem 0; font-size: .9rem; }
-  th, td { border: 1px solid #8884; padding: .3rem .6rem; text-align: left; }
-  #answer { background: #22c55e18; border-left: 3px solid #22c55e; padding: .8rem; border-radius: 0 8px 8px 0; white-space: pre-wrap; }
-  #chart img { max-width: 100%; border-radius: 8px; margin-top: .8rem; }
-  footer { margin-top: 1rem; font-size: .8rem; opacity: .6; }
-  .err { color: #dc2626; }
+  :root {
+    --bg: #f7f8fa; --panel: #ffffff; --text: #1d2129; --muted: #86909c;
+    --border: #e5e6eb; --border-strong: #c9cdd4;
+    --accent: #165dff; --accent-hover: #0e4bd6;
+    --ok: #00b42a; --err: #f53f3f; --warn: #ff7d00;
+    --log-bg: #fbfcfd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171a; --panel: #1e1f24; --text: #e6e8ea; --muted: #7d8592;
+      --border: #313339; --border-strong: #46484f;
+      --accent: #3c7eff; --accent-hover: #5a91ff;
+      --ok: #27c346; --err: #f76965; --warn: #ff9626;
+      --log-bg: #191a1e;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.6;
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+
+  /* 顶栏 */
+  .topbar {
+    display: flex; align-items: center; gap: 16px; height: 44px; padding: 0 16px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .brand { font-size: 14px; font-weight: 600; letter-spacing: .01em; }
+  .brand span { color: var(--accent); }
+  .topbar .env {
+    margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 12px;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  .env b { color: var(--text); font-weight: 500; }
+
+  .main { max-width: 1080px; margin: 0 auto; padding: 16px; }
+
+  /* 查询区 */
+  .querybox { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; }
+  .querybox .row { display: flex; gap: 8px; padding: 10px; }
+  #q {
+    flex: 1; padding: 7px 10px; font-size: 13px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-strong); border-radius: 2px; outline: none;
+  }
+  #q:focus { border-color: var(--accent); }
+  button.primary {
+    padding: 7px 18px; font-size: 13px; border: 1px solid var(--accent); border-radius: 2px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  .opt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px;
+    white-space: nowrap; cursor: pointer; user-select: none; }
+  .opt input { accent-color: var(--accent); }
+  .samples { border-top: 1px solid var(--border); padding: 6px 10px; color: var(--muted); font-size: 12px; }
+  .samples a { color: var(--muted); text-decoration: none; margin-right: 14px; cursor: pointer; }
+  .samples a:hover { color: var(--accent); text-decoration: underline; }
+
+  /* 分区 */
+  section.block { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; margin-top: 12px; }
+  .block-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 600; color: var(--text);
+  }
+  .block-head .sub { color: var(--muted); font-weight: 400; }
+  .block-body { padding: 0; }
+
+  /* 执行日志 */
+  #log {
+    list-style: none; padding: 8px 0; background: var(--log-bg);
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+  }
+  #log li { display: flex; gap: 10px; padding: 2px 12px; color: var(--muted); }
+  #log .t { color: var(--muted); flex-shrink: 0; }
+  #log .lv { width: 42px; flex-shrink: 0; font-weight: 600; }
+  #log .ok .lv { color: var(--ok); }
+  #log .bad .lv { color: var(--err); }
+  #log .run .lv { color: var(--accent); }
+
+  /* SQL */
+  pre.sql {
+    padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.7;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  .ghost {
+    font-size: 12px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 2px;
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .ghost:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* 结果表 */
+  .tblwrap { overflow: auto; max-height: 420px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th {
+    position: sticky; top: 0; background: var(--bg); color: var(--muted); font-weight: 500;
+    text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--border-strong); white-space: nowrap;
+  }
+  td { padding: 5px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+    font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: right; font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  td.idx { color: var(--muted); font-size: 11px; text-align: right; width: 1%; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  td i { color: var(--muted); }
+
+  /* 回答 */
+  .answer { padding: 10px 12px; white-space: pre-wrap; font-size: 13px; }
+  #chartimg { display: block; max-width: 100%; padding: 10px 12px; }
+
+  /* 状态条 */
+  .statusbar {
+    margin-top: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 3px;
+    background: var(--panel); color: var(--muted); font-size: 12px;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .statusbar b { color: var(--text); font-weight: 500; }
+  .flag-warn { color: var(--warn); }
+  .flag-ok { color: var(--ok); }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
-<h1>insight-agent · 用自然语言查数据</h1>
-<div id="bar">
-  <input id="q" placeholder="例如：支付总金额最高的前3个城市是哪几个？" />
-  <label><input type="checkbox" id="chart"> 图表</label>
-  <button id="go">提问</button>
+<div class="topbar">
+  <div class="brand">Insight<span>Agent</span> <span style="color:var(--muted);font-weight:400;font-size:12px">数据查询台</span></div>
+  <div class="env" id="env"></div>
 </div>
-<ul id="steps"></ul>
-<div id="out"></div>
-<footer id="usage"></footer>
+
+<div class="main">
+  <div class="querybox">
+    <div class="row">
+      <input id="q" placeholder="输入业务问题，例如：支付总金额最高的前3个城市是哪几个？" autocomplete="off">
+      <label class="opt"><input type="checkbox" id="chart">生成图表</label>
+      <button class="primary" id="go">查 询</button>
+    </div>
+    <div class="samples" id="samples">示例：</div>
+  </div>
+
+  <section class="block hidden" id="logblock">
+    <div class="block-head">执行日志</div>
+    <ol id="log"></ol>
+  </section>
+
+  <section class="block hidden" id="sqlblock">
+    <div class="block-head"><span>SQL <span class="sub" id="sqlnote"></span></span><button class="ghost" id="copy">复制</button></div>
+    <pre class="sql"><code id="sql"></code></pre>
+  </section>
+
+  <section class="block hidden" id="datablock">
+    <div class="block-head"><span>查询结果 <span class="sub" id="rowcount"></span></span></div>
+    <div class="tblwrap"><table id="tbl"></table></div>
+  </section>
+
+  <section class="block hidden" id="ansblock">
+    <div class="block-head">回答</div>
+    <div class="answer" id="answer"></div>
+  </section>
+
+  <section class="block hidden" id="chartblock">
+    <div class="block-head">图表</div>
+    <img id="chartimg" alt="chart">
+  </section>
+
+  <div class="statusbar hidden" id="statusbar"></div>
+</div>
+
 <script>
 const $ = (id) => document.getElementById(id);
-let es = null;
-function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+const EXAMPLES = [
+  "支付总金额最高的前3个城市是哪几个？",
+  "各品类的成交金额分别是多少？",
+  "下单次数最多的前5名客户是谁？",
+  "2025年上半年每个月的支付总金额是多少？",
+];
+let es = null, t0 = 0;
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function ts() { return ((performance.now() - t0) / 1000).toFixed(2) + "s"; }
+
+fetch("/healthz").then(r => r.json()).then(h => {
+  $("env").innerHTML =
+    `db <b>${esc(h.db || "-")}</b>` +
+    `model <b>${esc(h.model || "-")}</b>` +
+    `cache <b>${esc(h.cache)}</b>` +
+    (h.mock ? `<span style="color:var(--warn)">MOCK</span>` : "");
+}).catch(() => {});
+
+EXAMPLES.forEach(text => {
+  const a = document.createElement("a");
+  a.textContent = text;
+  a.onclick = () => { $("q").value = text; run(); };
+  $("samples").appendChild(a);
+});
+
 $("go").onclick = run;
-$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+$("copy").onclick = () => {
+  navigator.clipboard.writeText($("sql").textContent).then(() => {
+    $("copy").textContent = "已复制"; setTimeout(() => $("copy").textContent = "复制", 1200);
+  });
+};
+
+function makeRow(cls, level, text) {
+  const li = document.createElement("li");
+  if (cls) li.className = cls;
+  li.innerHTML = `<span class="t">${ts()}</span><span class="lv">${level}</span><span>${esc(text)}</span>`;
+  return li;
+}
+
+function isNumCol(rows, i) {
+  return rows.length > 0 && rows.every(r => r[i] === null || typeof r[i] === "number");
+}
+
 function run() {
   const q = $("q").value.trim();
   if (!q) return;
   if (es) es.close();
-  $("steps").innerHTML = ""; $("out").innerHTML = ""; $("usage").textContent = "";
+  ["sqlblock", "datablock", "ansblock", "chartblock", "statusbar"].forEach(id => $(id).classList.add("hidden"));
+  $("log").innerHTML = "";
+  $("logblock").classList.remove("hidden");
   $("go").disabled = true;
-  const url = `/api/ask?question=${encodeURIComponent(q)}&chart=${$("chart").checked ? 1 : 0}`;
-  es = new EventSource(url);
+  t0 = performance.now();
+  $("log").appendChild(makeRow("run", "RUN", `question=${JSON.stringify(q)}`));
+  const pending = makeRow("run", "…", "等待下一步");
+  $("log").appendChild(pending);
+
+  es = new EventSource(`/api/ask?question=${encodeURIComponent(q)}&chart=${$("chart").checked ? 1 : 0}`);
+
   es.addEventListener("node", (e) => {
     const d = JSON.parse(e.data);
-    const li = document.createElement("li");
-    li.innerHTML = d.ok === false
-      ? `⚠️ ${esc(d.label)} — <span class="err">${esc(d.error_kind || "")} ${esc(d.error_message || "")}</span>`
-      : `✅ ${esc(d.label)}`;
-    $("steps").appendChild(li);
+    const bad = d.ok === false;
+    const detail = bad ? `${d.label} — ${d.error_kind || ""} ${d.error_message || ""}` : d.label;
+    $("log").insertBefore(makeRow(bad ? "bad" : "ok", bad ? "ERR" : "OK", detail), pending);
   });
+
   es.addEventListener("final", (e) => {
     const d = JSON.parse(e.data);
-    let html = "";
-    if (d.sql) html += `<h3>SQL${d.cached ? "（缓存命中）" : ""}</h3><pre>${esc(d.sql)}</pre>`;
-    if (d.columns.length) {
-      html += "<table><tr>" + d.columns.map(c => `<th>${esc(c)}</th>`).join("") + "</tr>";
-      html += d.rows.map(r => "<tr>" + r.map(v => `<td>${esc(v === null ? "NULL" : String(v))}</td>`).join("") + "</tr>").join("");
-      html += "</table>";
-      if (d.row_count > d.rows.length) html += `<p>共 ${d.row_count} 行，仅展示前 ${d.rows.length} 行</p>`;
+    pending.remove();
+    $("log").appendChild(
+      makeRow(d.status.startsWith("ok") ? "ok" : "bad", "DONE", `status=${d.status} latency=${d.latency_ms}ms`)
+    );
+
+    if (d.sql) {
+      $("sql").textContent = d.sql;
+      $("sqlnote").textContent = d.cached ? "（缓存命中，未消耗模型调用）" : "";
+      $("sqlblock").classList.remove("hidden");
     }
-    if (d.answer) html += `<div id="answer">${esc(d.answer)}</div>`;
-    if (d.chart_url) html += `<div id="chart"><img src="${esc(d.chart_url)}" alt="chart"></div>`;
-    if (d.chart_error) html += `<p class="err">图表生成失败：${esc(d.chart_error)}</p>`;
-    $("out").innerHTML = html;
+    if (d.columns && d.columns.length) {
+      const numCols = d.columns.map((_, i) => isNumCol(d.rows, i));
+      let html = "<thead><tr><th class='idx'>#</th>" +
+        d.columns.map((c, i) => `<th${numCols[i] ? ' class="num"' : ""}>${esc(c)}</th>`).join("") + "</tr></thead><tbody>";
+      html += d.rows.map((r, ri) => `<tr><td class="idx">${ri + 1}</td>` +
+        r.map((v, i) => `<td${numCols[i] ? ' class="num"' : ""}>${v === null ? "<i>NULL</i>" : esc(v)}</td>`).join("") + "</tr>").join("");
+      $("tbl").innerHTML = html + "</tbody>";
+      $("rowcount").textContent = d.row_count > d.rows.length
+        ? `共 ${d.row_count} 行，展示前 ${d.rows.length} 行` : `${d.row_count} 行`;
+      $("datablock").classList.remove("hidden");
+    }
+    if (d.answer) { $("answer").textContent = d.answer; $("ansblock").classList.remove("hidden"); }
+    if (d.chart_url) { $("chartimg").src = d.chart_url; $("chartblock").classList.remove("hidden"); }
+
     const u = d.usage || {};
-    $("usage").textContent = `状态 ${d.status} · LLM 调用 ${u.llm_calls ?? 0} 次 · tokens ${u.total_tokens ?? 0} · 成本 ${(u.cost ?? 0).toFixed(6)} · 耗时 ${d.latency_ms} ms` + (d.hallucination_blocked ? " · ⚠️ 防幻觉拦截已触发" : "");
+    let bar = `status=<b>${esc(d.status)}</b>` +
+      `<span>llm_calls=<b>${u.llm_calls ?? 0}</b></span>` +
+      `<span>tokens=<b>${u.total_tokens ?? 0}</b></span>` +
+      `<span>cost=<b>${(u.cost ?? 0).toFixed(6)}</b></span>` +
+      `<span>latency=<b>${d.latency_ms}ms</b></span>` +
+      `<span>cache=<b>${d.cached ? "hit" : "miss"}</b></span>`;
+    if (d.selected_tables) bar += `<span>tables=<b>${esc(d.selected_tables.join(","))}</b></span>`;
+    if (d.hallucination_blocked) bar += `<span class="flag-warn">hallucination_blocked=true</span>`;
+    if (d.chart_error) bar += `<span class="flag-warn">chart_error=${esc(d.chart_error)}</span>`;
+    $("statusbar").innerHTML = bar;
+    $("statusbar").classList.remove("hidden");
     es.close(); $("go").disabled = false;
   });
-  es.onerror = () => { es.close(); $("go").disabled = false; };
+
+  es.onerror = () => {
+    pending.remove();
+    $("log").appendChild(makeRow("bad", "ERR", "连接中断"));
+    es.close(); $("go").disabled = false;
+  };
 }
+
+const params = new URLSearchParams(location.search);
+if (params.get("q")) { $("q").value = params.get("q"); if (params.get("chart") === "1") $("chart").checked = true; run(); }
 </script>
 </body>
-</html>"""
+</html>
+"""
 
 
 if __name__ == "__main__":
