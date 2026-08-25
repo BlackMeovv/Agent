@@ -20,6 +20,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from pydantic import BaseModel, Field
 
 from .agent import InsightAgent, RunOutcome
 from .cache import BaseCache, build_cache, cache_key
@@ -40,6 +41,13 @@ COST = Counter("insight_llm_cost_total", "累计 LLM 成本（按 .env 单价折
 
 _CHART_NAME = re.compile(r"^chart-[0-9a-f]{12}\.png$")
 
+
+class MemoryNote(BaseModel):
+    # 注意：必须定义在模块顶层——`from __future__ import annotations` 下，
+    # 函数内的局部类无法被 FastAPI 的类型解析找到，会被误判成查询参数
+    note: str = Field(min_length=1, max_length=500)
+    user: str = Field(default="default", max_length=64)
+
 _NODE_LABELS = {
     "generate_sql": "生成 SQL",
     "execute": "守卫校验并执行",
@@ -56,6 +64,8 @@ def _sse(event: str, data: dict) -> str:
 
 def _node_event(node: str, delta: dict) -> dict:
     payload: dict = {"node": node, "label": _NODE_LABELS.get(node, node)}
+    if delta.get("thought"):
+        payload["thought"] = delta["thought"]
     attempts = delta.get("attempts")
     if node == "execute" and attempts:
         last = attempts[-1]
@@ -131,6 +141,40 @@ def create_app(agent: InsightAgent | None = None, settings: Settings | None = No
     @app.get("/metrics")
     def metrics():
         return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    @app.get("/api/schema")
+    def api_schema():
+        cols = get_agent().db.table_columns()
+        return {"tables": [{"name": t, "columns": c} for t, c in cols.items()]}
+
+    # ---- 记忆管理（口径偏好）----
+
+    def get_memory():
+        agent_ = get_agent()
+        if agent_.memory is None:
+            from .memory import MemoryStore
+
+            agent_.memory = MemoryStore(settings.memory_db_path)
+        return agent_.memory
+
+    @app.get("/api/memory")
+    def memory_list(user: str = Query("default", max_length=64)):
+        return {
+            "notes": [
+                {"id": i, "note": note, "created_at": ts}
+                for i, note, ts in get_memory().notes(user)
+            ]
+        }
+
+    @app.post("/api/memory")
+    def memory_add(item: MemoryNote):
+        return {"id": get_memory().remember(item.user, item.note)}
+
+    @app.delete("/api/memory/{note_id}")
+    def memory_delete(note_id: int, user: str = Query("default", max_length=64)):
+        if not get_memory().forget(user, note_id):
+            raise HTTPException(status_code=404)
+        return {"ok": True}
 
     @app.get("/charts/{name}")
     def chart_file(name: str):
@@ -220,7 +264,7 @@ PAGE = """<!DOCTYPE html>
     --log-bg: #fbfcfd;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #17171a; --panel: #1e1f24; --text: #e6e8ea; --muted: #7d8592;
       --border: #313339; --border-strong: #46484f;
       --accent: #3c7eff; --accent-hover: #5a91ff;
@@ -228,30 +272,89 @@ PAGE = """<!DOCTYPE html>
       --log-bg: #191a1e;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #17171a; --panel: #1e1f24; --text: #e6e8ea; --muted: #7d8592;
+    --border: #313339; --border-strong: #46484f;
+    --accent: #3c7eff; --accent-hover: #5a91ff;
+    --ok: #27c346; --err: #f76965; --warn: #ff9626;
+    --log-bg: #191a1e;
+  }
   * { box-sizing: border-box; margin: 0; }
-  html, body { height: 100%; }
   body {
     background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.6;
     font-family: -apple-system, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
   }
   .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
 
-  /* 顶栏 */
   .topbar {
     display: flex; align-items: center; gap: 16px; height: 44px; padding: 0 16px;
     background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
   }
-  .brand { font-size: 14px; font-weight: 600; letter-spacing: .01em; }
+  .brand { font-size: 14px; font-weight: 600; }
   .brand span { color: var(--accent); }
+  .brand .sub { color: var(--muted); font-weight: 400; font-size: 12px; }
   .topbar .env {
-    margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 12px;
-    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted);
+    font-size: 12px; font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   .env b { color: var(--text); font-weight: 500; }
+  .iconbtn {
+    font-size: 12px; padding: 3px 10px; border: 1px solid var(--border-strong); border-radius: 2px;
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .iconbtn:hover { color: var(--accent); border-color: var(--accent); }
 
-  .main { max-width: 1080px; margin: 0 auto; padding: 16px; }
+  .layout { display: flex; align-items: flex-start; }
 
-  /* 查询区 */
+  /* 左栏 */
+  .sidebar {
+    width: 236px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--panel);
+    position: sticky; top: 44px; max-height: calc(100vh - 44px); overflow-y: auto;
+  }
+  .side-sec { border-bottom: 1px solid var(--border); padding: 10px 12px; }
+  .side-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .tree details { margin-bottom: 2px; }
+  .tree summary {
+    cursor: pointer; font-size: 12.5px; padding: 2px 4px; border-radius: 2px; user-select: none;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  .tree summary:hover { background: var(--bg); color: var(--accent); }
+  .tree ul { list-style: none; padding: 0 0 4px 18px; }
+  .tree li {
+    display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 1px 4px;
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; cursor: pointer; border-radius: 2px;
+  }
+  .tree li:hover { background: var(--bg); color: var(--accent); }
+  .tree li .ty { color: var(--muted); font-size: 11px; }
+  .memlist { list-style: none; padding: 0; }
+  .memlist li {
+    display: flex; gap: 6px; align-items: baseline; font-size: 12px; padding: 3px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .memlist li:last-child { border-bottom: 0; }
+  .memlist .del { color: var(--muted); cursor: pointer; border: 0; background: none; font-size: 12px; padding: 0 2px; }
+  .memlist .del:hover { color: var(--err); }
+  .memadd { display: flex; gap: 6px; margin-top: 6px; }
+  .memadd input {
+    flex: 1; min-width: 0; font-size: 12px; padding: 4px 6px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border-strong); border-radius: 2px; outline: none;
+  }
+  .memadd input:focus { border-color: var(--accent); }
+  .histlist { list-style: none; padding: 0; }
+  .histlist li {
+    font-size: 12px; color: var(--muted); padding: 3px 4px; cursor: pointer; border-radius: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .histlist li:hover { background: var(--bg); color: var(--accent); }
+  .side-empty { color: var(--muted); font-size: 12px; }
+
+  /* 中栏 */
+  .main { flex: 1; min-width: 0; padding: 14px 16px; }
+
   .querybox { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; }
   .querybox .row { display: flex; gap: 8px; padding: 10px; }
   #q {
@@ -261,10 +364,10 @@ PAGE = """<!DOCTYPE html>
   #q:focus { border-color: var(--accent); }
   button.primary {
     padding: 7px 18px; font-size: 13px; border: 1px solid var(--accent); border-radius: 2px;
-    background: var(--accent); color: #fff; cursor: pointer;
+    background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap;
   }
   button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-  button.primary:disabled { opacity: .5; cursor: default; }
+  button.danger { border-color: var(--err); background: var(--err); }
   .opt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px;
     white-space: nowrap; cursor: pointer; user-select: none; }
   .opt input { accent-color: var(--accent); }
@@ -272,40 +375,21 @@ PAGE = """<!DOCTYPE html>
   .samples a { color: var(--muted); text-decoration: none; margin-right: 14px; cursor: pointer; }
   .samples a:hover { color: var(--accent); text-decoration: underline; }
 
-  /* 分区 */
   section.block { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; margin-top: 12px; }
   .block-head {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 12px; border-bottom: 1px solid var(--border);
-    font-size: 12px; font-weight: 600; color: var(--text);
+    padding: 7px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600;
   }
   .block-head .sub { color: var(--muted); font-weight: 400; }
-  .block-body { padding: 0; }
-
-  /* 执行日志 */
-  #log {
-    list-style: none; padding: 8px 0; background: var(--log-bg);
-    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
-  }
-  #log li { display: flex; gap: 10px; padding: 2px 12px; color: var(--muted); }
-  #log .t { color: var(--muted); flex-shrink: 0; }
-  #log .lv { width: 42px; flex-shrink: 0; font-weight: 600; }
-  #log .ok .lv { color: var(--ok); }
-  #log .bad .lv { color: var(--err); }
-  #log .run .lv { color: var(--accent); }
-
-  /* SQL */
   pre.sql {
     padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.7;
     font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   .ghost {
     font-size: 12px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 2px;
-    background: transparent; color: var(--muted); cursor: pointer;
+    background: transparent; color: var(--muted); cursor: pointer; margin-left: 8px;
   }
   .ghost:hover { color: var(--accent); border-color: var(--accent); }
-
-  /* 结果表 */
   .tblwrap { overflow: auto; max-height: 420px; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   th {
@@ -318,66 +402,137 @@ PAGE = """<!DOCTYPE html>
   td.idx { color: var(--muted); font-size: 11px; text-align: right; width: 1%; }
   tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
   td i { color: var(--muted); }
-
-  /* 回答 */
-  .answer { padding: 10px 12px; white-space: pre-wrap; font-size: 13px; }
+  .answer { padding: 10px 12px; white-space: pre-wrap; }
   #chartimg { display: block; max-width: 100%; padding: 10px 12px; }
 
-  /* 状态条 */
-  .statusbar {
-    margin-top: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 3px;
-    background: var(--panel); color: var(--muted); font-size: 12px;
-    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-    display: flex; gap: 16px; flex-wrap: wrap;
+  /* 右栏：运行过程 */
+  .runpanel {
+    width: 288px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--panel);
+    position: sticky; top: 44px; max-height: calc(100vh - 44px); overflow-y: auto;
   }
-  .statusbar b { color: var(--text); font-weight: 500; }
-  .flag-warn { color: var(--warn); }
-  .flag-ok { color: var(--ok); }
+  .run-sec { border-bottom: 1px solid var(--border); padding: 10px 12px; }
+  #tasks { list-style: none; padding: 0; }
+  #tasks li.task { display: flex; gap: 9px; padding: 5px 0; align-items: flex-start; }
+  .ticon {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 3px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+  }
+  .task.ok .ticon { background: var(--ok); }
+  .task.bad .ticon { background: var(--err); }
+  .task.run .ticon { background: transparent; }
+  .tlabel { font-size: 12.5px; }
+  .task.bad .tlabel { color: var(--err); }
+  .tthought {
+    font-size: 12px; color: var(--muted); margin-top: 2px; padding-left: 8px;
+    border-left: 2px solid var(--border);
+  }
+  .terr { font-size: 12px; color: var(--err); margin-top: 2px; }
+  .spinner {
+    width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent);
+    border-radius: 50%; display: inline-block; animation: spin .7s linear infinite; margin-top: 5px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  details.attempts summary { font-size: 12px; color: var(--muted); cursor: pointer; padding: 2px 0; }
+  .attempt { border-top: 1px dashed var(--border); padding: 6px 0; }
+  .attempt .meta { font-size: 11.5px; margin-bottom: 2px; }
+  .attempt .meta .bad { color: var(--err); }
+  .attempt .meta .good { color: var(--ok); }
+  .attempt pre {
+    font-size: 11.5px; overflow-x: auto; color: var(--muted);
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  #runstats { font-size: 12px; font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  #runstats div { display: flex; justify-content: space-between; padding: 2px 0; color: var(--muted); }
+  #runstats b { color: var(--text); font-weight: 500; }
+  #runstats .flag-warn { color: var(--warn); }
+  .run-empty { color: var(--muted); font-size: 12px; }
   .hidden { display: none !important; }
+  @media (max-width: 1180px) { .sidebar { display: none; } }
+  @media (max-width: 860px) { .runpanel { display: none; } }
 </style>
 </head>
 <body>
 <div class="topbar">
-  <div class="brand">Insight<span>Agent</span> <span style="color:var(--muted);font-weight:400;font-size:12px">数据查询台</span></div>
-  <div class="env" id="env"></div>
+  <div class="brand">Insight<span>Agent</span> <span class="sub">数据查询台</span></div>
+  <div class="env">
+    <span id="envinfo"></span>
+    <button class="iconbtn" id="theme" title="切换主题">主题</button>
+  </div>
 </div>
 
-<div class="main">
-  <div class="querybox">
-    <div class="row">
-      <input id="q" placeholder="输入业务问题，例如：支付总金额最高的前3个城市是哪几个？" autocomplete="off">
-      <label class="opt"><input type="checkbox" id="chart">生成图表</label>
-      <button class="primary" id="go">查 询</button>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="side-sec">
+      <div class="side-title">数据表</div>
+      <div class="tree" id="tree"><span class="side-empty">加载中…</span></div>
     </div>
-    <div class="samples" id="samples">示例：</div>
+    <div class="side-sec">
+      <div class="side-title">口径记忆</div>
+      <ul class="memlist" id="memlist"></ul>
+      <div class="memadd">
+        <input id="memnote" placeholder="如：销售额=已完成订单成交金额" maxlength="200">
+        <button class="iconbtn" id="memaddbtn">记住</button>
+      </div>
+    </div>
+    <div class="side-sec">
+      <div class="side-title">查询历史 <button class="iconbtn" id="histclear">清空</button></div>
+      <ul class="histlist" id="histlist"></ul>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="querybox">
+      <div class="row">
+        <input id="q" placeholder="输入业务问题，例如：支付总金额最高的前3个城市是哪几个？" autocomplete="off">
+        <label class="opt"><input type="checkbox" id="chart">生成图表</label>
+        <button class="primary" id="go">查 询</button>
+        <button class="primary danger hidden" id="stop">停 止</button>
+      </div>
+      <div class="samples" id="samples">示例：</div>
+    </div>
+
+    <section class="block hidden" id="sqlblock">
+      <div class="block-head"><span>SQL <span class="sub" id="sqlnote"></span></span><button class="ghost" id="copy">复制</button></div>
+      <pre class="sql"><code id="sql"></code></pre>
+    </section>
+
+    <section class="block hidden" id="datablock">
+      <div class="block-head">
+        <span>查询结果 <span class="sub" id="rowcount"></span></span>
+        <span><button class="ghost" id="csv">导出 CSV</button></span>
+      </div>
+      <div class="tblwrap"><table id="tbl"></table></div>
+    </section>
+
+    <section class="block hidden" id="ansblock">
+      <div class="block-head">回答</div>
+      <div class="answer" id="answer"></div>
+    </section>
+
+    <section class="block hidden" id="chartblock">
+      <div class="block-head">图表</div>
+      <img id="chartimg" alt="chart">
+    </section>
   </div>
 
-  <section class="block hidden" id="logblock">
-    <div class="block-head">执行日志</div>
-    <ol id="log"></ol>
-  </section>
-
-  <section class="block hidden" id="sqlblock">
-    <div class="block-head"><span>SQL <span class="sub" id="sqlnote"></span></span><button class="ghost" id="copy">复制</button></div>
-    <pre class="sql"><code id="sql"></code></pre>
-  </section>
-
-  <section class="block hidden" id="datablock">
-    <div class="block-head"><span>查询结果 <span class="sub" id="rowcount"></span></span></div>
-    <div class="tblwrap"><table id="tbl"></table></div>
-  </section>
-
-  <section class="block hidden" id="ansblock">
-    <div class="block-head">回答</div>
-    <div class="answer" id="answer"></div>
-  </section>
-
-  <section class="block hidden" id="chartblock">
-    <div class="block-head">图表</div>
-    <img id="chartimg" alt="chart">
-  </section>
-
-  <div class="statusbar hidden" id="statusbar"></div>
+  <aside class="runpanel">
+    <div class="run-sec">
+      <div class="side-title">运行过程</div>
+      <ol id="tasks"><li class="run-empty">提交一个问题后，这里实时显示 agent 的每一步与思路。</li></ol>
+    </div>
+    <div class="run-sec hidden" id="attsec">
+      <div class="side-title">尝试详情</div>
+      <details class="attempts" id="attempts" open>
+        <summary id="attsummary"></summary>
+        <div id="attbody"></div>
+      </details>
+    </div>
+    <div class="run-sec hidden" id="statsec">
+      <div class="side-title">本次消耗</div>
+      <div id="runstats"></div>
+    </div>
+  </aside>
 </div>
 
 <script>
@@ -388,19 +543,108 @@ const EXAMPLES = [
   "下单次数最多的前5名客户是谁？",
   "2025年上半年每个月的支付总金额是多少？",
 ];
-let es = null, t0 = 0;
+const NL = String.fromCharCode(10);
+let es = null, lastData = null;
 
 function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
-function ts() { return ((performance.now() - t0) / 1000).toFixed(2) + "s"; }
 
+/* ---------- 主题 ---------- */
+function applyTheme(mode) {
+  if (mode === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = mode;
+  $("theme").textContent = { auto: "主题:自动", light: "主题:亮", dark: "主题:暗" }[mode];
+}
+let themeMode = localStorage.getItem("ia_theme") || "auto";
+applyTheme(themeMode);
+$("theme").onclick = () => {
+  themeMode = { auto: "light", light: "dark", dark: "auto" }[themeMode];
+  localStorage.setItem("ia_theme", themeMode);
+  applyTheme(themeMode);
+};
+
+/* ---------- 环境信息 ---------- */
 fetch("/healthz").then(r => r.json()).then(h => {
-  $("env").innerHTML =
-    `db <b>${esc(h.db || "-")}</b>` +
-    `model <b>${esc(h.model || "-")}</b>` +
-    `cache <b>${esc(h.cache)}</b>` +
-    (h.mock ? `<span style="color:var(--warn)">MOCK</span>` : "");
+  $("envinfo").innerHTML =
+    `db <b>${esc(h.db || "-")}</b>&nbsp; model <b>${esc(h.model || "-")}</b>&nbsp; cache <b>${esc(h.cache)}</b>` +
+    (h.mock ? '&nbsp;<span style="color:var(--warn)">MOCK</span>' : "");
 }).catch(() => {});
 
+/* ---------- 库表结构树 ---------- */
+fetch("/api/schema").then(r => r.json()).then(d => {
+  const tree = $("tree"); tree.innerHTML = "";
+  d.tables.forEach(t => {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = `${t.name} (${t.columns.length})`;
+    sum.title = "双击插入表名"; sum.ondblclick = () => insertToken(t.name);
+    det.appendChild(sum);
+    const ul = document.createElement("ul");
+    t.columns.forEach(c => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${esc(c.name)}</span><span class="ty">${esc(c.type)}</span>`;
+      li.title = "点击插入列名"; li.onclick = () => insertToken(c.name);
+      ul.appendChild(li);
+    });
+    det.appendChild(ul);
+    tree.appendChild(det);
+  });
+}).catch(() => { $("tree").innerHTML = '<span class="side-empty">schema 加载失败</span>'; });
+
+function insertToken(token) {
+  const input = $("q");
+  input.value = input.value ? input.value + " " + token : token;
+  input.focus();
+}
+
+/* ---------- 口径记忆 ---------- */
+function loadMemory() {
+  fetch("/api/memory").then(r => r.json()).then(d => {
+    const ul = $("memlist"); ul.innerHTML = "";
+    if (!d.notes.length) { ul.innerHTML = '<li class="side-empty" style="border:0">（无，在下方添加）</li>'; return; }
+    d.notes.forEach(n => {
+      const li = document.createElement("li");
+      li.innerHTML = `<button class="del" title="删除">×</button><span>${esc(n.note)}</span>`;
+      li.querySelector(".del").onclick = () => {
+        fetch(`/api/memory/${n.id}`, { method: "DELETE" }).then(loadMemory);
+      };
+      ul.appendChild(li);
+    });
+  }).catch(() => {});
+}
+$("memaddbtn").onclick = () => {
+  const note = $("memnote").value.trim();
+  if (!note) return;
+  fetch("/api/memory", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  }).then(() => { $("memnote").value = ""; loadMemory(); });
+};
+$("memnote").addEventListener("keydown", e => { if (e.key === "Enter") $("memaddbtn").click(); });
+loadMemory();
+
+/* ---------- 查询历史 ---------- */
+function history() { try { return JSON.parse(localStorage.getItem("ia_history") || "[]"); } catch { return []; } }
+function renderHistory() {
+  const ul = $("histlist"); ul.innerHTML = "";
+  const items = history();
+  if (!items.length) { ul.innerHTML = '<li class="side-empty" style="cursor:default">（空）</li>'; return; }
+  items.slice(0, 15).forEach(h => {
+    const li = document.createElement("li");
+    li.textContent = h.q; li.title = h.q;
+    li.onclick = () => { $("q").value = h.q; $("chart").checked = !!h.chart; run(); };
+    ul.appendChild(li);
+  });
+}
+function pushHistory(q, chart) {
+  const items = history().filter(h => h.q !== q);
+  items.unshift({ q, chart, ts: Date.now() });
+  try { localStorage.setItem("ia_history", JSON.stringify(items.slice(0, 50))); } catch {}
+  renderHistory();
+}
+$("histclear").onclick = () => { localStorage.removeItem("ia_history"); renderHistory(); };
+renderHistory();
+
+/* ---------- 示例 ---------- */
 EXAMPLES.forEach(text => {
   const a = document.createElement("a");
   a.textContent = text;
@@ -408,7 +652,39 @@ EXAMPLES.forEach(text => {
   $("samples").appendChild(a);
 });
 
+/* ---------- CSV 导出 ---------- */
+$("csv").onclick = () => {
+  if (!lastData) return;
+  const quote = (v) => '"' + String(v === null ? "" : v).replaceAll('"', '""') + '"';
+  const lines = [lastData.columns.map(quote).join(",")];
+  lastData.rows.forEach(r => lines.push(r.map(quote).join(",")));
+  const blob = new Blob(["﻿" + lines.join(NL)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "query-result.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* ---------- 运行过程面板 ---------- */
+function taskRow(state, label, thought, err) {
+  const li = document.createElement("li");
+  li.className = "task " + state;
+  const icon = state === "run" ? '<span class="spinner"></span>' : (state === "bad" ? "✕" : "✓");
+  let body = `<div><div class="tlabel">${esc(label)}</div>`;
+  if (thought) body += `<div class="tthought">${esc(thought)}</div>`;
+  if (err) body += `<div class="terr">${esc(err)}</div>`;
+  body += "</div>";
+  li.innerHTML = `<span class="ticon">${icon}</span>${body}`;
+  return li;
+}
+
 $("go").onclick = run;
+$("stop").onclick = () => {
+  if (es) es.close();
+  $("tasks").appendChild(taskRow("bad", "已手动停止"));
+  running(false);
+};
 $("q").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
 $("copy").onclick = () => {
   navigator.clipboard.writeText($("sql").textContent).then(() => {
@@ -416,57 +692,65 @@ $("copy").onclick = () => {
   });
 };
 
-function makeRow(cls, level, text) {
-  const li = document.createElement("li");
-  if (cls) li.className = cls;
-  li.innerHTML = `<span class="t">${ts()}</span><span class="lv">${level}</span><span>${esc(text)}</span>`;
-  return li;
-}
-
 function isNumCol(rows, i) {
   return rows.length > 0 && rows.every(r => r[i] === null || typeof r[i] === "number");
+}
+function running(on) {
+  $("go").classList.toggle("hidden", on);
+  $("stop").classList.toggle("hidden", !on);
 }
 
 function run() {
   const q = $("q").value.trim();
   if (!q) return;
   if (es) es.close();
-  ["sqlblock", "datablock", "ansblock", "chartblock", "statusbar"].forEach(id => $(id).classList.add("hidden"));
-  $("log").innerHTML = "";
-  $("logblock").classList.remove("hidden");
-  $("go").disabled = true;
-  t0 = performance.now();
-  $("log").appendChild(makeRow("run", "RUN", `question=${JSON.stringify(q)}`));
-  const pending = makeRow("run", "…", "等待下一步");
-  $("log").appendChild(pending);
+  ["sqlblock", "datablock", "ansblock", "chartblock", "attsec", "statsec"].forEach(id => $(id).classList.add("hidden"));
+  $("tasks").innerHTML = "";
+  running(true);
+  pushHistory(q, $("chart").checked);
+  const pending = taskRow("run", "思考中…");
+  $("tasks").appendChild(pending);
 
   es = new EventSource(`/api/ask?question=${encodeURIComponent(q)}&chart=${$("chart").checked ? 1 : 0}`);
 
   es.addEventListener("node", (e) => {
     const d = JSON.parse(e.data);
     const bad = d.ok === false;
-    const detail = bad ? `${d.label} — ${d.error_kind || ""} ${d.error_message || ""}` : d.label;
-    $("log").insertBefore(makeRow(bad ? "bad" : "ok", bad ? "ERR" : "OK", detail), pending);
+    const err = bad ? `${d.error_kind || ""}${d.error_message ? "：" + d.error_message : ""}` : "";
+    $("tasks").insertBefore(taskRow(bad ? "bad" : "ok", d.label, d.thought, err), pending);
   });
 
   es.addEventListener("final", (e) => {
     const d = JSON.parse(e.data);
     pending.remove();
-    $("log").appendChild(
-      makeRow(d.status.startsWith("ok") ? "ok" : "bad", "DONE", `status=${d.status} latency=${d.latency_ms}ms`)
-    );
+    $("tasks").appendChild(taskRow(
+      d.status.startsWith("ok") ? "ok" : "bad",
+      d.status.startsWith("ok") ? "完成" : "未能得到可靠结果",
+      d.cached ? "缓存命中：直接返回上次结果，未消耗模型调用" : ""
+    ));
 
     if (d.sql) {
       $("sql").textContent = d.sql;
-      $("sqlnote").textContent = d.cached ? "（缓存命中，未消耗模型调用）" : "";
+      $("sqlnote").textContent = d.cached ? "（缓存命中）" : "";
       $("sqlblock").classList.remove("hidden");
     }
+    if (d.attempts && d.attempts.length > 1) {
+      $("attsummary").textContent = `共 ${d.attempts.length} 次尝试（含自动修复）`;
+      $("attbody").innerHTML = d.attempts.map((a, i) => {
+        const state = a.ok
+          ? '<span class="good">成功</span>'
+          : `<span class="bad">${esc(a.error_kind || "失败")}${a.error_message ? "：" + esc(a.error_message) : ""}</span>`;
+        return `<div class="attempt"><div class="meta mono">#${i + 1} ${state}</div><pre>${esc(a.sql)}</pre></div>`;
+      }).join("");
+      $("attsec").classList.remove("hidden");
+    }
     if (d.columns && d.columns.length) {
+      lastData = { columns: d.columns, rows: d.rows };
       const numCols = d.columns.map((_, i) => isNumCol(d.rows, i));
       let html = "<thead><tr><th class='idx'>#</th>" +
-        d.columns.map((c, i) => `<th${numCols[i] ? ' class="num"' : ""}>${esc(c)}</th>`).join("") + "</tr></thead><tbody>";
+        d.columns.map((c, i) => `<th${numCols[i] ? " class='num'" : ""}>${esc(c)}</th>`).join("") + "</tr></thead><tbody>";
       html += d.rows.map((r, ri) => `<tr><td class="idx">${ri + 1}</td>` +
-        r.map((v, i) => `<td${numCols[i] ? ' class="num"' : ""}>${v === null ? "<i>NULL</i>" : esc(v)}</td>`).join("") + "</tr>").join("");
+        r.map((v, i) => `<td${numCols[i] ? " class='num'" : ""}>${v === null ? "<i>NULL</i>" : esc(v)}</td>`).join("") + "</tr>").join("");
       $("tbl").innerHTML = html + "</tbody>";
       $("rowcount").textContent = d.row_count > d.rows.length
         ? `共 ${d.row_count} 行，展示前 ${d.rows.length} 行` : `${d.row_count} 行`;
@@ -476,24 +760,24 @@ function run() {
     if (d.chart_url) { $("chartimg").src = d.chart_url; $("chartblock").classList.remove("hidden"); }
 
     const u = d.usage || {};
-    let bar = `status=<b>${esc(d.status)}</b>` +
-      `<span>llm_calls=<b>${u.llm_calls ?? 0}</b></span>` +
-      `<span>tokens=<b>${u.total_tokens ?? 0}</b></span>` +
-      `<span>cost=<b>${(u.cost ?? 0).toFixed(6)}</b></span>` +
-      `<span>latency=<b>${d.latency_ms}ms</b></span>` +
-      `<span>cache=<b>${d.cached ? "hit" : "miss"}</b></span>`;
-    if (d.selected_tables) bar += `<span>tables=<b>${esc(d.selected_tables.join(","))}</b></span>`;
-    if (d.hallucination_blocked) bar += `<span class="flag-warn">hallucination_blocked=true</span>`;
-    if (d.chart_error) bar += `<span class="flag-warn">chart_error=${esc(d.chart_error)}</span>`;
-    $("statusbar").innerHTML = bar;
-    $("statusbar").classList.remove("hidden");
-    es.close(); $("go").disabled = false;
+    const rows = [
+      ["status", d.status], ["llm_calls", u.llm_calls ?? 0], ["tokens", u.total_tokens ?? 0],
+      ["cost", (u.cost ?? 0).toFixed(6)], ["latency", d.latency_ms + "ms"],
+      ["cache", d.cached ? "hit" : "miss"],
+    ];
+    if (d.selected_tables) rows.push(["rag_tables", d.selected_tables.join(",")]);
+    let stats = rows.map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("");
+    if (d.hallucination_blocked) stats += '<div class="flag-warn"><span>hallucination</span><b class="flag-warn">blocked</b></div>';
+    if (d.chart_error) stats += `<div class="flag-warn"><span>chart</span><b class="flag-warn">${esc(d.chart_error)}</b></div>`;
+    $("runstats").innerHTML = stats;
+    $("statsec").classList.remove("hidden");
+    es.close(); running(false);
   });
 
   es.onerror = () => {
     pending.remove();
-    $("log").appendChild(makeRow("bad", "ERR", "连接中断"));
-    es.close(); $("go").disabled = false;
+    $("tasks").appendChild(taskRow("bad", "连接中断"));
+    es.close(); running(false);
   };
 }
 

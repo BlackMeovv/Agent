@@ -164,6 +164,18 @@ class _ServerDatabase:
     def schema_text(self, sample_rows: int = 3) -> str:
         return "\n\n".join(self.schema_by_table(sample_rows).values())
 
+    _columns_schema_filter = ""  # 子类提供 information_schema 的库过滤条件
+
+    def table_columns(self) -> dict[str, list[dict]]:
+        rows = self._fetch_all(
+            "SELECT table_name, column_name, data_type FROM information_schema.columns "
+            f"WHERE {self._columns_schema_filter} ORDER BY table_name, ordinal_position"
+        )
+        out: dict[str, list[dict]] = {}
+        for table, column, data_type in rows:
+            out.setdefault(table, []).append({"name": column, "type": data_type or ""})
+        return out
+
     def _sample_block(self, table: str, sample_rows: int) -> str:
         if sample_rows <= 0:
             return ""
@@ -184,6 +196,7 @@ class _ServerDatabase:
 class MySQLDatabase(_ServerDatabase):
     dialect = "mysql"
     _default_port = 3306
+    _columns_schema_filter = "table_schema = DATABASE()"
 
     def _default_connect(self):
         try:
@@ -248,6 +261,7 @@ class MySQLDatabase(_ServerDatabase):
 class PostgresDatabase(_ServerDatabase):
     dialect = "postgres"
     _default_port = 5432
+    _columns_schema_filter = "table_schema = 'public'"
 
     def _default_connect(self):
         try:

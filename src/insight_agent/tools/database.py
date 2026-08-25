@@ -62,6 +62,24 @@ class ReadOnlyDatabase:
             conn.close()
         return [r[0] for r in rows]
 
+    def table_columns(self) -> dict[str, list[dict]]:
+        """结构化的表→列清单（schema 浏览器用）。"""
+        out: dict[str, list[dict]] = {}
+        conn = self._connect()
+        try:
+            conn.set_authorizer(None)  # PRAGMA 自省是自家代码路径，非模型输入
+            for name in [
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+                ).fetchall()
+            ]:
+                rows = conn.execute(f'PRAGMA table_info("{name}")').fetchall()
+                out[name] = [{"name": r[1], "type": r[2] or ""} for r in rows]
+        finally:
+            conn.close()
+        return out
+
     def schema_by_table(self, sample_rows: int = 3, max_cell: int = 60) -> dict[str, str]:
         """逐表的 schema 上下文：建表 DDL + 少量样例行（值格式很关键）。
 

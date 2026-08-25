@@ -45,7 +45,8 @@ class TestBasics:
     def test_index_page(self, client):
         resp = client.get("/")
         assert resp.status_code == 200 and "InsightAgent" in resp.text
-        assert "执行日志" in resp.text  # 生产控制台式布局的关键区块
+        for block in ("数据表", "口径记忆", "查询历史", "运行过程"):  # 三栏控制台关键区块
+            assert block in resp.text
 
     def test_metrics(self, client):
         client.get("/api/ask", params={"question": "上海的客户一共有多少个？"})
@@ -88,3 +89,36 @@ class TestChartFiles:
 
     def test_missing_chart_404(self, client):
         assert client.get("/charts/chart-000000000000.png").status_code == 404
+
+
+class TestSchemaApi:
+    def test_tables_and_columns(self, client):
+        data = client.get("/api/schema").json()
+        names = {t["name"] for t in data["tables"]}
+        assert {"customers", "orders", "payments"} <= names
+        customers = next(t for t in data["tables"] if t["name"] == "customers")
+        assert {"name": "city", "type": "TEXT"} in customers["columns"]
+
+
+class TestMemoryApi:
+    def test_crud_roundtrip(self, client):
+        assert client.get("/api/memory").json()["notes"] == []
+        note_id = client.post("/api/memory", json={"note": "销售额=已完成订单成交金额"}).json()["id"]
+        notes = client.get("/api/memory").json()["notes"]
+        assert len(notes) == 1 and notes[0]["note"].startswith("销售额")
+        assert client.delete(f"/api/memory/{note_id}").json()["ok"]
+        assert client.get("/api/memory").json()["notes"] == []
+
+    def test_delete_missing_404(self, client):
+        assert client.delete("/api/memory/9999").status_code == 404
+
+    def test_validation(self, client):
+        assert client.post("/api/memory", json={"note": ""}).status_code == 422
+
+
+class TestThoughtInStream:
+    def test_generate_sql_event_carries_thought(self, client):
+        resp = client.get("/api/ask", params={"question": "思路事件测试：上海的客户数？"})
+        events = sse_events(resp.text)
+        gen = next(d for e, d in events if e == "node" and d["node"] == "generate_sql")
+        assert gen.get("thought") == "思路。"

@@ -18,6 +18,11 @@ def db(demo_db_path):
 
 
 @pytest.fixture()
-def settings(demo_db_path):
-    # _env_file=None：测试不读 .env，行为与 CI 一致
-    return Settings(_env_file=None, db_path=str(demo_db_path))
+def settings(demo_db_path, tmp_path):
+    # _env_file=None：测试不读 .env，行为与 CI 一致；可写路径全部指向临时目录
+    return Settings(
+        _env_file=None,
+        db_path=str(demo_db_path),
+        memory_db_path=str(tmp_path / "memory.sqlite"),
+        chart_out_dir=str(tmp_path / "charts"),
+    )

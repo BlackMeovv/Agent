@@ -80,6 +80,7 @@ class _State(TypedDict, total=False):
     chart_error: str | None
     attempts: list[Attempt]
     accept_empty: bool  # repair 确认空结果为最终答案
+    thought: str  # 模型在代码块外写的"一句话思路"（UI 运行面板展示）
     give_up_reason: str
     status: str
     answer: str
@@ -111,6 +112,13 @@ def extract_sql(text: str) -> str:
 
 def normalize_sql(sql: str) -> str:
     return re.sub(r"\s+", " ", (sql or "").strip().rstrip(";")).lower()
+
+
+def extract_thought(text: str) -> str:
+    """提取代码块之外的散文（模型的"一句话思路"），供 UI 的运行过程面板展示。"""
+    prose = _CODE_BLOCK.sub(" ", text or "")
+    prose = re.sub(r"\s+", " ", prose).strip()
+    return prose[:200]
 
 
 def extract_code(text: str, langs: tuple[str, ...] = ("python", "py")) -> str:
@@ -375,7 +383,7 @@ class InsightAgent:
         except LLMError as e:
             return {"status": "failed", "give_up_reason": f"LLM 调用失败: {e}"}
         self._record_generation(state, "generate_sql", messages, reply)
-        return {"candidate_sql": extract_sql(reply.text)}
+        return {"candidate_sql": extract_sql(reply.text), "thought": extract_thought(reply.text)}
 
     def _node_execute(self, state: _State) -> _State:
         sql_raw = state.get("candidate_sql", "")
@@ -465,9 +473,9 @@ class InsightAgent:
             if resent_last and last.error_kind == "empty_result" and last.sql_final:
                 # 模型【原样重发上一条】空结果 SQL：确认数据确实为空，接受为最终答案。
                 # 注意必须严格等于上一条——重发更早的失败 SQL 是模型混乱，不是确认。
-                return {"accept_empty": True}
+                return {"accept_empty": True, "thought": extract_thought(reply.text)}
             if normalize_sql(candidate) not in seen:
-                return {"candidate_sql": candidate}
+                return {"candidate_sql": candidate, "thought": extract_thought(reply.text)}
             messages = messages + [
                 {"role": "assistant", "content": reply.text},
                 {"role": "user", "content": prompts.REPAIR_NUDGE},
