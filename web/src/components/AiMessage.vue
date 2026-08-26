@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { pillOf, useAppStore, type AiMsg } from "../stores/app";
 import ResultTable from "./ResultTable.vue";
 
 const props = defineProps<{ msg: AiMsg }>();
 const store = useAppStore();
+
+// 运行过程在消息内原地下拉展开；运行中自动展开、结束后自动收起
+const open = ref(props.msg.status === "running");
+watch(
+  () => props.msg.status,
+  (now, prev) => {
+    if (now === "running") open.value = true;
+    else if (prev === "running") open.value = false;
+  },
+);
 
 const pill = computed(() => pillOf(props.msg.status));
 const meta = computed(() => {
@@ -30,15 +40,41 @@ function copyAnswer() {
       <div
         class="strip"
         :style="{ animation: msg.status === 'running' ? 'pulse 1.6s ease-in-out infinite' : 'none' }"
-        @click="store.panelId = store.panelId === msg.id ? null : msg.id"
+        @click="open = !open"
       >
         <span v-if="msg.status === 'running'" class="spinner"></span>
         <span v-else class="dot" :style="{ background: pill.bg, color: pill.c }">{{ pill.i }}</span>
         <span :style="{ color: pill.c }" class="stitle">{{ pill.t }}</span>
         <span class="smeta">{{ meta }}</span>
-        <span class="schev" :class="{ open: store.panelId === msg.id }">›</span>
+        <span class="schev" :class="{ open }">›</span>
       </div>
       <span v-if="msg.status === 'cached'" class="cachetag">缓存命中 · 零消耗</span>
+    </div>
+
+    <div v-if="open" class="stepsbox">
+      <div v-if="msg.status === 'cached'" class="scache">
+        命中结果缓存，直接返回历史结果，本次无运行步骤、零消耗。
+      </div>
+      <div v-for="(s, i) in msg.steps" :key="i" class="step">
+        <span v-if="s.state === 'run'" class="spinner sspin"></span>
+        <span
+          v-else
+          class="sdot"
+          :style="{
+            background: s.state === 'error' ? 'var(--errbg)' : 'var(--okbg)',
+            color: s.state === 'error' ? 'var(--err)' : 'var(--ok)',
+          }"
+        >{{ s.state === "error" ? "✕" : "✓" }}</span>
+        <div class="sbody">
+          <div class="slabel">{{ s.label }}</div>
+          <div v-if="s.thought" class="sthought">{{ s.thought }}</div>
+          <div v-if="s.err" class="serr mono">{{ s.err }}</div>
+        </div>
+      </div>
+      <div v-if="msg.status === 'running'" class="step">
+        <span class="spinner sspin"></span>
+        <div class="sbody"><div class="slabel" style="color: var(--ink3)">等待下一步…</div></div>
+      </div>
     </div>
 
     <div v-if="msg.status === 'blocked'" class="blocked">
@@ -72,6 +108,15 @@ function copyAnswer() {
 .schev { color: var(--ink3); font-size: 12px; line-height: 1; transition: transform 0.15s; display: inline-block; }
 .schev.open { transform: rotate(90deg); }
 .cachetag { font-size: 12px; color: var(--acc); background: var(--accbg); border-radius: 999px; padding: 3px 10px; }
+.stepsbox { margin: -2px 0 0 10px; padding: 4px 0 4px 16px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.scache { background: var(--accbg); border-radius: 9px; padding: 9px 12px; font-size: 13px; color: var(--acc); }
+.step { display: flex; gap: 9px; animation: fadeUp 0.25s ease; }
+.sspin { width: 13px; height: 13px; margin-top: 3px; }
+.sdot { width: 15px; height: 15px; flex: none; margin-top: 2px; border-radius: 50%; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.sbody { min-width: 0; }
+.slabel { font-size: 13px; color: var(--ink); }
+.sthought { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
+.serr { font-size: 12.5px; color: var(--err); margin-top: 2px; }
 .blocked { background: var(--errbg); border: 1px solid var(--err); border-radius: 10px; padding: 11px 14px; }
 .btitle { font-size: 13.5px; font-weight: 600; color: var(--err); margin-bottom: 2px; }
 .btext { font-size: 13.5px; color: var(--ink2); white-space: pre-wrap; }

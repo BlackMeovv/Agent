@@ -171,7 +171,8 @@ export const useAppStore = defineStore("app", {
       this.msgs.push(ai);
       this.draft = "";
       this.running = true;
-      this.panelId = aiId;
+      // 运行过程在消息内下拉展示；右栏只有已打开时才跟随到新一次运行
+      if (this.panelId) this.panelId = aiId;
 
       const patch = (obj: Partial<AiMsg>) => {
         const m = this.msgs.find((x) => x.id === aiId) as AiMsg | undefined;
