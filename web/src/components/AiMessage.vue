@@ -36,7 +36,7 @@ function copyAnswer() {
         <span v-else class="dot" :style="{ background: pill.bg, color: pill.c }">{{ pill.i }}</span>
         <span :style="{ color: pill.c }" class="stitle">{{ pill.t }}</span>
         <span class="smeta">{{ meta }}</span>
-        <span class="schev">{{ store.panelId === msg.id ? "▸" : "▹" }}</span>
+        <span class="schev" :class="{ open: store.panelId === msg.id }">›</span>
       </div>
       <span v-if="msg.status === 'cached'" class="cachetag">缓存命中 · 零消耗</span>
     </div>
@@ -69,7 +69,8 @@ function copyAnswer() {
 .dot { width: 14px; height: 14px; border-radius: 50%; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .stitle { font-weight: 500; }
 .smeta { color: var(--ink3); }
-.schev { color: var(--ink3); font-size: 9px; }
+.schev { color: var(--ink3); font-size: 12px; line-height: 1; transition: transform 0.15s; display: inline-block; }
+.schev.open { transform: rotate(90deg); }
 .cachetag { font-size: 12px; color: var(--acc); background: var(--accbg); border-radius: 999px; padding: 3px 10px; }
 .blocked { background: var(--errbg); border: 1px solid var(--err); border-radius: 10px; padding: 11px 14px; }
 .btitle { font-size: 13.5px; font-weight: 600; color: var(--err); margin-bottom: 2px; }

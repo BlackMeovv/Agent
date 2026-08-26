@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { tokenizeSql } from "../lib/sql";
 import { pillOf, useAppStore, type AiMsg } from "../stores/app";
 
 const props = defineProps<{ msg: AiMsg }>();
 const store = useAppStore();
 
-const secProg = ref(true);
-const secOut = ref(true);
-const secCtx = ref(true);
+// 打开面板时分区默认全部收起；运行中"过程"自动展开、结束后自动收起
+const secProg = ref(props.msg.status === "running");
+const secOut = ref(false);
+const secCtx = ref(false);
+
+watch(
+  () => props.msg.id,
+  () => {
+    secProg.value = props.msg.status === "running";
+    secOut.value = false;
+    secCtx.value = false;
+  },
+);
+watch(
+  () => props.msg.status,
+  (now, prev) => {
+    if (now === "running") secProg.value = true;
+    else if (prev === "running") secProg.value = false;
+  },
+);
 
 const ctxUsed = computed(
   () => props.msg.contextUsed ?? { glossary: [], examples: [], memories: [] },
@@ -37,9 +54,9 @@ function copySql() {
       </div>
       <div class="pbody">
         <div class="sec" @click="secProg = !secProg">
-          <span class="stitle serif">过程</span>
-          <span class="schev" :style="{ transform: secProg ? 'rotate(90deg)' : 'none' }">›</span>
+          <span class="stitle">过程</span>
           <span class="spill" :style="{ color: pill.c, background: pill.bg }">{{ pill.t }}</span>
+          <span class="schev" :class="{ open: secProg }">›</span>
         </div>
         <div v-if="secProg" class="steps">
           <div v-if="msg.status === 'cached'" class="cachebox">
@@ -69,8 +86,9 @@ function copySql() {
 
         <div class="hr"></div>
         <div class="sec" @click="secOut = !secOut">
-          <span class="stitle serif">产出</span>
-          <span class="schev" :style="{ transform: secOut ? 'rotate(90deg)' : 'none' }">›</span>
+          <span class="stitle">产出</span>
+          <span v-if="msg.sql" class="ssub mono">SQL</span>
+          <span class="schev" :class="{ open: secOut }">›</span>
         </div>
         <div v-if="secOut" class="out">
           <div v-if="msg.sql" class="sqlcard">
@@ -85,8 +103,9 @@ function copySql() {
 
         <div class="hr"></div>
         <div class="sec" @click="secCtx = !secCtx">
-          <span class="stitle serif">上下文</span>
-          <span class="schev" :style="{ transform: secCtx ? 'rotate(90deg)' : 'none' }">›</span>
+          <span class="stitle">上下文</span>
+          <span class="ssub">{{ (msg.selectedTables?.length || 0) + ctxUsed.glossary.length + ctxUsed.examples.length + ctxUsed.memories.length }} 项注入</span>
+          <span class="schev" :class="{ open: secCtx }">›</span>
         </div>
         <div v-if="secCtx" class="ctx">
           <div>
@@ -133,13 +152,16 @@ function copySql() {
 .panel { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .phead { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
 .pq { font-size: 12.5px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.pclose { cursor: pointer; color: var(--ink3); font-size: 14px; line-height: 1; }
-.pclose:hover { color: var(--ink); }
+.pclose { width: 24px; height: 24px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; color: var(--ink3); font-size: 13px; line-height: 1; }
+.pclose:hover { background: var(--soft); color: var(--ink); }
 .pbody { flex: 1; overflow-y: auto; padding: 2px 18px 16px; }
-.sec { display: flex; align-items: center; gap: 7px; padding: 14px 0; cursor: pointer; }
-.stitle { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-.schev { font-size: 11px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
-.spill { margin-left: auto; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+.sec { display: flex; align-items: center; gap: 8px; padding: 13px 2px; cursor: pointer; user-select: none; }
+.sec:hover .schev { color: var(--ink); }
+.stitle { font-size: 13.5px; font-weight: 600; }
+.ssub { font-size: 11.5px; color: var(--ink3); }
+.schev { margin-left: auto; font-size: 13px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
+.schev.open { transform: rotate(90deg); }
+.spill { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
 .steps { display: flex; flex-direction: column; gap: 11px; padding-bottom: 14px; }
 .cachebox { background: var(--accbg); border-radius: 9px; padding: 10px 12px; font-size: 13px; color: var(--acc); }
 .step { display: flex; gap: 9px; animation: fadeUp 0.25s ease; }

@@ -51,6 +51,9 @@ watch(
     <template v-if="store.msgs.length === 0">
       <div class="empty">
         <div class="greet serif">{{ greeting }}</div>
+        <div class="gsub">
+          已连接 <span class="mono">{{ store.env?.db || "…" }}</span> · 每个回答都可追溯到 SQL
+        </div>
         <div class="cwrap"><Composer placeholder="问一个关于数据的问题…" /></div>
         <div class="samples">
           <div v-for="s in SAMPLES" :key="s" class="sample" @click="store.ask(s)">{{ s }}</div>
@@ -84,11 +87,13 @@ watch(
 .dbpill { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
 .okdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .mock { font-size: 11px; font-weight: 600; color: var(--warn); background: var(--warnbg); border-radius: 4px; padding: 1px 7px; }
-.paneltoggle { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--ink3); cursor: pointer; padding: 0; }
-.paneltoggle:hover { color: var(--ink); border-color: var(--ink3); }
-.paneltoggle.on { color: var(--acc); background: var(--accbg); border-color: transparent; }
+.paneltoggle { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; border-radius: 7px; background: none; color: var(--ink3); cursor: pointer; padding: 0; }
+.paneltoggle:hover { background: var(--soft); color: var(--ink); }
+.paneltoggle.on { color: var(--acc); background: var(--accbg); }
 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 24px 60px; }
-.greet { font-size: 34px; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 26px; }
+.greet { font-size: 34px; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 6px; }
+.gsub { font-size: 13px; color: var(--ink3); margin-bottom: 26px; }
+.gsub .mono { font-size: 12px; }
 .cwrap { width: 100%; max-width: 680px; }
 .samples { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 680px; margin-top: 16px; }
 .sample { border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; font-size: 12.5px; color: var(--ink2); background: var(--card); cursor: pointer; }
