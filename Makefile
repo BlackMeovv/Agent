@@ -46,3 +46,9 @@ db-dumps:           ## 生成 MySQL/PG 演示库初始化脚本（配合 docker-
 	uv run python -m insight_agent.demo_data --dump mysql > docker/dbs/mysql/10-data.sql
 	uv run python -m insight_agent.demo_data --dump postgres > docker/dbs/postgres/10-data.sql
 	@echo "已生成 docker/dbs/{mysql,postgres}/10-data.sql"
+
+web-dev:            ## 前端开发服务器（需先 cd web && npm install）
+	cd web && npm run dev
+
+web-build:          ## 构建前端（产物自动被后端托管为主页）
+	cd web && npm run build

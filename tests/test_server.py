@@ -122,3 +122,20 @@ class TestThoughtInStream:
         events = sse_events(resp.text)
         gen = next(d for e, d in events if e == "node" and d["node"] == "generate_sql")
         assert gen.get("thought") == "思路。"
+
+
+class TestWebDistServing:
+    def test_dist_served_when_present(self, settings, db, tmp_path):
+        dist = tmp_path / "dist"
+        (dist / "assets").mkdir(parents=True)
+        (dist / "index.html").write_text("<html><body>VUE-APP</body></html>", encoding="utf-8")
+        (dist / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
+        cfg = settings.model_copy(update={"web_dist": str(dist)})
+        from insight_agent.agent import InsightAgent
+        from insight_agent.llm import MockLLM
+
+        app = create_app(agent=InsightAgent(cfg, db, MockLLM(["x"])), settings=cfg)
+        with TestClient(app) as c:
+            assert "VUE-APP" in c.get("/").text
+            assert c.get("/assets/app.js").status_code == 200
+            assert "InsightAgent" in c.get("/legacy").text  # 内置页降为后备

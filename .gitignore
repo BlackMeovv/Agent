@@ -18,6 +18,10 @@ eval/results/
 docker/dbs/*/10-data.sql
 *.log
 
+# frontend
+web/node_modules/
+web/dist/
+
 # editors
 .idea/
 .vscode/

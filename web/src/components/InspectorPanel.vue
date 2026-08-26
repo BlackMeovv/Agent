@@ -1,0 +1,144 @@
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import { tokenizeSql } from "../lib/sql";
+import { pillOf, useAppStore, type AiMsg } from "../stores/app";
+
+const props = defineProps<{ msg: AiMsg }>();
+const store = useAppStore();
+
+const secProg = ref(true);
+const secOut = ref(true);
+const secCtx = ref(false);
+
+const pill = computed(() => pillOf(props.msg.status));
+const sqlToks = computed(() => (props.msg.sql ? tokenizeSql(props.msg.sql) : []));
+const usageLine = computed(() => {
+  const u = props.msg.usage;
+  if (!u) return "";
+  const dur = props.msg.latencyMs != null ? ` · ${(props.msg.latencyMs / 1000).toFixed(1)}s` : "";
+  return `LLM 调用 ${u.calls} 次 · ${u.tokens} tokens · cost ${u.cost.toFixed(6)}${dur}`;
+});
+
+function copySql() {
+  if (props.msg.sql) navigator.clipboard?.writeText(props.msg.sql);
+}
+</script>
+
+<template>
+  <div class="wrap">
+    <div class="panel">
+      <div class="phead">
+        <span class="pq">「{{ msg.q }}」</span>
+        <span class="pclose" @click="store.panelId = null">✕</span>
+      </div>
+      <div class="pbody">
+        <div class="sec" @click="secProg = !secProg">
+          <span class="stitle serif">过程</span>
+          <span class="schev" :style="{ transform: secProg ? 'rotate(90deg)' : 'none' }">›</span>
+          <span class="spill" :style="{ color: pill.c, background: pill.bg }">{{ pill.t }}</span>
+        </div>
+        <div v-if="secProg" class="steps">
+          <div v-if="msg.status === 'cached'" class="cachebox">
+            命中结果缓存，直接返回历史结果，本次无运行步骤、零消耗。
+          </div>
+          <div v-for="(s, i) in msg.steps" :key="i" class="step">
+            <span v-if="s.state === 'run'" class="spinner"></span>
+            <span
+              v-else
+              class="dot"
+              :style="{
+                background: s.state === 'error' ? 'var(--errbg)' : 'var(--okbg)',
+                color: s.state === 'error' ? 'var(--err)' : 'var(--ok)',
+              }"
+            >{{ s.state === "error" ? "✕" : "✓" }}</span>
+            <div class="sbody">
+              <div class="slabel">{{ s.label }}</div>
+              <div v-if="s.thought" class="sthought">{{ s.thought }}</div>
+              <div v-if="s.err" class="serr mono">{{ s.err }}</div>
+            </div>
+          </div>
+          <div v-if="msg.status === 'running'" class="step">
+            <span class="spinner"></span>
+            <div class="sbody"><div class="slabel" style="color: var(--ink3)">等待下一步…</div></div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="sec" @click="secOut = !secOut">
+          <span class="stitle serif">产出</span>
+          <span class="schev" :style="{ transform: secOut ? 'rotate(90deg)' : 'none' }">›</span>
+        </div>
+        <div v-if="secOut" class="out">
+          <div v-if="msg.sql" class="sqlcard">
+            <div class="sqlhead">
+              <span class="mono sqllabel">生成的 SQL</span>
+              <button class="sqlcopy" @click="copySql">复制</button>
+            </div>
+            <pre class="mono"><span v-for="(tk, i) in sqlToks" :key="i" :style="{ color: tk.c }">{{ tk.t }}</span></pre>
+          </div>
+          <div v-if="msg.selectedTables" class="usage">Schema RAG 选表：{{ msg.selectedTables.join(", ") }}</div>
+          <div v-if="usageLine" class="usage">{{ usageLine }}</div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="sec" @click="secCtx = !secCtx">
+          <span class="stitle serif">上下文</span>
+          <span class="schev" :style="{ transform: secCtx ? 'rotate(90deg)' : 'none' }">›</span>
+        </div>
+        <div v-if="secCtx" class="ctx">
+          <div>
+            <div class="ctxlabel">数据库连接<span class="ctxsub">由后端配置，自动接入</span></div>
+            <div class="dbpill">
+              <span class="okdot"></span>{{ store.env?.db || "-" }} · {{ store.env?.model || "-" }}
+            </div>
+          </div>
+          <div>
+            <div class="ctxlabel">注入的记忆 · {{ store.mems.length }}</div>
+            <div class="memcol">
+              <div v-for="pm in store.mems" :key="pm.id" class="memchip">{{ pm.note }}</div>
+              <div v-if="!store.mems.length" class="ctxsub">（无）</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.wrap { width: 330px; flex: none; padding: 14px 14px 14px 0; display: flex; min-height: 0; }
+.panel { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.phead { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.pq { font-size: 12.5px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.pclose { cursor: pointer; color: var(--ink3); font-size: 14px; line-height: 1; }
+.pclose:hover { color: var(--ink); }
+.pbody { flex: 1; overflow-y: auto; padding: 2px 18px 16px; }
+.sec { display: flex; align-items: center; gap: 7px; padding: 14px 0; cursor: pointer; }
+.stitle { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.schev { font-size: 11px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
+.spill { margin-left: auto; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+.steps { display: flex; flex-direction: column; gap: 11px; padding-bottom: 14px; }
+.cachebox { background: var(--accbg); border-radius: 9px; padding: 10px 12px; font-size: 13px; color: var(--acc); }
+.step { display: flex; gap: 9px; animation: fadeUp 0.25s ease; }
+.step .spinner { margin-top: 4px; }
+.dot { width: 15px; height: 15px; flex: none; margin-top: 3px; border-radius: 50%; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.sbody { min-width: 0; }
+.slabel { font-size: 13.5px; color: var(--ink); }
+.sthought { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
+.serr { font-size: 12.5px; color: var(--err); margin-top: 2px; }
+.hr { height: 1px; background: var(--line); }
+.out { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; }
+.sqlcard { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--code); }
+.sqlhead { display: flex; align-items: center; padding: 5px 11px; border-bottom: 1px solid var(--line); }
+.sqllabel { font-size: 11px; color: var(--ink3); }
+.sqlcopy { margin-left: auto; border: none; background: none; color: var(--acc); font-size: 12px; cursor: pointer; padding: 0; }
+pre { margin: 0; padding: 10px 12px; font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; }
+.usage { font-size: 12px; color: var(--ink3); }
+.ctx { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+.ctxlabel { font-size: 12px; color: var(--ink3); margin-bottom: 6px; }
+.ctxsub { margin-left: 6px; font-size: 11px; color: var(--ink3); }
+.dbpill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 13px; font-size: 12.5px; background: var(--paper); }
+.okdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.memcol { display: flex; flex-direction: column; gap: 5px; }
+.memchip { font-size: 12.5px; color: var(--ink2); border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; background: var(--paper); }
+</style>

@@ -63,6 +63,17 @@ insight-agent ask "上海的客户一共有多少个？" --db mysql://readonly:r
 内置电商演示库只是让仓库开箱即跑的样例数据；跑 BIRD 基准时 agent 会在
 几十个从未见过的第三方库上逐题切换（`--db-root`），这本身就是泛化能力的证明。
 
+## 前端（Vue3）
+
+`web/` 是正式前端：Vue 3 + Vite + Pinia，按 Claude 风格设计稿实现（对话流 + 运行过程检查器 +
+库表结构/记忆/历史侧栏，亮/暗主题）。
+
+```bash
+cd web && npm install
+npm run dev      # 开发：http://localhost:5173（已配好代理到后端 8000）
+npm run build    # 构建后，后端检测到 web/dist 会自动作为主页托管（内置页移至 /legacy）
+```
+
 ## 其他入口
 
 ```bash

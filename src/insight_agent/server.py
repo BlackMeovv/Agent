@@ -245,9 +245,26 @@ def create_app(agent: InsightAgent | None = None, settings: Settings | None = No
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    @app.get("/", response_class=HTMLResponse)
-    def index():
-        return PAGE
+    web_dist = Path(settings.web_dist)
+    if (web_dist / "index.html").exists():
+        # Vue 前端构建产物存在：作为主页托管，内置单文件页降为 /legacy 后备
+        from fastapi.staticfiles import StaticFiles
+
+        app.mount("/assets", StaticFiles(directory=str(web_dist / "assets")), name="assets")
+
+        @app.get("/", response_class=HTMLResponse)
+        def index():
+            return (web_dist / "index.html").read_text(encoding="utf-8")
+
+        @app.get("/legacy", response_class=HTMLResponse)
+        def legacy():
+            return PAGE
+
+    else:
+
+        @app.get("/", response_class=HTMLResponse)
+        def index():
+            return PAGE
 
     return app
 

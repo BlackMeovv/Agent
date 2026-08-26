@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     server_port: int = 8000
     # 前端联调 CORS：逗号分隔的允许来源（如 http://localhost:5173）；留空则关闭
     cors_allow_origins: str = ""
+    # Vue 前端构建产物目录：存在则托管为主页（内置单文件页移至 /legacy）
+    web_dist: str = "web/dist"
     # 结果缓存：redis://host:6379/0；不配置则用进程内 LRU
     redis_url: str = ""
     cache_ttl_seconds: int = 600
