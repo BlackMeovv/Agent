@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useAppStore } from "../stores/app";
 
 const store = useAppStore();
@@ -11,6 +11,33 @@ function addMem() {
   const note = window.prompt("新增记忆（会注入到后续每次提问）");
   if (note && note.trim()) store.addMem(note.trim());
 }
+
+// ---- 历史会话 ⋯ 菜单与重命名 ----
+const menuFor = ref<string | null>(null);
+const editingId = ref<string | null>(null);
+const editText = ref("");
+const editInput = ref<HTMLInputElement[] | null>(null);
+
+function openMenu(id: string) {
+  menuFor.value = menuFor.value === id ? null : id;
+}
+async function startRename(id: string, title: string) {
+  menuFor.value = null;
+  editingId.value = id;
+  editText.value = title;
+  await nextTick();
+  editInput.value?.[0]?.focus();
+  editInput.value?.[0]?.select();
+}
+function commitRename() {
+  if (editingId.value) store.renameConvo(editingId.value, editText.value);
+  editingId.value = null;
+}
+function closeMenu() {
+  menuFor.value = null;
+}
+onMounted(() => document.addEventListener("click", closeMenu));
+onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
 </script>
 
 <template>
@@ -89,11 +116,35 @@ function addMem() {
         v-for="cv in store.convos"
         :key="cv.id"
         class="hist"
-        :class="{ cur: cv.id === store.curConvo }"
+        :class="{ cur: cv.id === store.curConvo, menuon: menuFor === cv.id }"
         @click="store.pickConvo(cv.id)"
       >
-        <span class="htext">{{ cv.title }}</span>
-        <span class="hdel" title="删除会话" @click.stop="store.delConvo(cv.id)">✕</span>
+        <input
+          v-if="editingId === cv.id"
+          ref="editInput"
+          v-model="editText"
+          class="hedit"
+          @click.stop
+          @keydown.enter="commitRename"
+          @keydown.esc="editingId = null"
+          @blur="commitRename"
+        />
+        <span v-else class="htext">{{ cv.title }}</span>
+        <span class="hmore" title="更多操作" @click.stop="openMenu(cv.id)">⋯</span>
+        <div v-if="menuFor === cv.id" class="menu" @click.stop>
+          <div class="mitem" @click="startRename(cv.id, cv.title)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M11.3 2.7a1.7 1.7 0 0 1 2.4 2.4L5.5 13.3 2 14l0.7-3.5 8.6-7.8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+            </svg>
+            重命名
+          </div>
+          <div class="mitem danger" @click="menuFor = null; store.delConvo(cv.id)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M2.5 4h11M6.5 4V2.8h3V4M4 4l0.7 9.2h6.6L12 4M6.6 6.5v4.5M9.4 6.5v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            删除
+          </div>
+        </div>
       </div>
     </div>
 
@@ -144,13 +195,19 @@ function addMem() {
 .madd { align-self: flex-start; border: none; background: none; color: var(--acc); font-size: 12px; cursor: pointer; padding: 2px 4px; }
 .divider { height: 1px; background: var(--line); margin: 14px 6px 8px; }
 .histlabel { padding: 0 10px 4px; font-size: 12px; color: var(--ink3); }
-.hist { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; color: var(--ink2); }
+.hist { position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; color: var(--ink2); }
 .hist:hover { background: var(--soft); }
 .hist.cur { background: var(--soft); color: var(--ink); }
 .htext { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hdel { visibility: hidden; flex: none; color: var(--ink3); font-size: 11px; line-height: 1; padding: 2px; border-radius: 4px; }
-.hist:hover .hdel { visibility: visible; }
-.hdel:hover { color: var(--err); background: var(--errbg); }
+.hedit { flex: 1; min-width: 0; border: 1px solid var(--acc); border-radius: 5px; background: var(--card); color: var(--ink); font-size: 13px; padding: 1px 6px; outline: none; }
+.hmore { visibility: hidden; flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--ink3); font-size: 14px; line-height: 1; border-radius: 5px; }
+.hist:hover .hmore, .hist.menuon .hmore { visibility: visible; }
+.hmore:hover { background: var(--line); color: var(--ink); }
+.menu { position: absolute; right: 6px; top: 28px; z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); padding: 4px; min-width: 116px; }
+.mitem { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.mitem:hover { background: var(--soft); }
+.mitem.danger { color: var(--err); }
+.mitem.danger:hover { background: var(--errbg); }
 .foot { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accbg); color: var(--acc); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
 .uname { font-size: 13px; color: var(--ink2); }

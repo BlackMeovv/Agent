@@ -144,6 +144,15 @@ export const useAppStore = defineStore("app", {
       this.panelId = null;
     },
 
+    renameConvo(id: string, title: string) {
+      const t = title.trim();
+      const c = this.convos.find((x) => x.id === id);
+      if (c && t) {
+        c.title = t.slice(0, 40);
+        this.persist();
+      }
+    },
+
     delConvo(id: string) {
       if (id === this.curConvo) {
         this.stop();
