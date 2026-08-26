@@ -101,6 +101,7 @@ def _outcome_payload(outcome: RunOutcome, cached: bool = False) -> dict:
             for a in outcome.attempts
         ],
         "selected_tables": outcome.selected_tables,
+        "context_used": outcome.context_used,
         "hallucination_blocked": outcome.hallucination_blocked,
         "chart_url": f"/charts/{Path(outcome.chart_path).name}" if outcome.chart_path else None,
         "chart_error": outcome.chart_error,

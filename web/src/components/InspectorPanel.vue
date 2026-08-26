@@ -8,7 +8,11 @@ const store = useAppStore();
 
 const secProg = ref(true);
 const secOut = ref(true);
-const secCtx = ref(false);
+const secCtx = ref(true);
+
+const ctxUsed = computed(
+  () => props.msg.contextUsed ?? { glossary: [], examples: [], memories: [] },
+);
 
 const pill = computed(() => pillOf(props.msg.status));
 const sqlToks = computed(() => (props.msg.sql ? tokenizeSql(props.msg.sql) : []));
@@ -76,7 +80,6 @@ function copySql() {
             </div>
             <pre class="mono"><span v-for="(tk, i) in sqlToks" :key="i" :style="{ color: tk.c }">{{ tk.t }}</span></pre>
           </div>
-          <div v-if="msg.selectedTables" class="usage">Schema RAG 选表：{{ msg.selectedTables.join(", ") }}</div>
           <div v-if="usageLine" class="usage">{{ usageLine }}</div>
         </div>
 
@@ -87,16 +90,36 @@ function copySql() {
         </div>
         <div v-if="secCtx" class="ctx">
           <div>
-            <div class="ctxlabel">数据库连接<span class="ctxsub">由后端配置，自动接入</span></div>
-            <div class="dbpill">
-              <span class="okdot"></span>{{ store.env?.db || "-" }} · {{ store.env?.model || "-" }}
+            <div class="ctxlabel">连接<span class="ctxsub">由后端配置，自动接入</span></div>
+            <div class="pillrow">
+              <span class="dbpill"><span class="okdot"></span>{{ store.env?.db || "-" }}</span>
+              <span class="dbpill">{{ store.env?.model || "-" }}</span>
+              <span v-if="store.env" class="dbpill">cache · {{ store.env.cache }}</span>
+            </div>
+          </div>
+          <div v-if="msg.selectedTables?.length">
+            <div class="ctxlabel">Schema RAG 命中的表</div>
+            <div class="pillrow">
+              <span v-for="t in msg.selectedTables" :key="t" class="dbpill mono">{{ t }}</span>
+            </div>
+          </div>
+          <div v-if="ctxUsed.glossary.length">
+            <div class="ctxlabel">命中的业务字典</div>
+            <div class="pillrow">
+              <span v-for="g in ctxUsed.glossary" :key="g" class="dbpill">{{ g }}</span>
+            </div>
+          </div>
+          <div v-if="ctxUsed.examples.length">
+            <div class="ctxlabel">few-shot 参考例句</div>
+            <div class="memcol">
+              <div v-for="ex in ctxUsed.examples" :key="ex" class="memchip">{{ ex }}</div>
             </div>
           </div>
           <div>
-            <div class="ctxlabel">注入的记忆 · {{ store.mems.length }}</div>
+            <div class="ctxlabel">注入的记忆 · {{ ctxUsed.memories.length }}</div>
             <div class="memcol">
-              <div v-for="pm in store.mems" :key="pm.id" class="memchip">{{ pm.note }}</div>
-              <div v-if="!store.mems.length" class="ctxsub">（无）</div>
+              <div v-for="pm in ctxUsed.memories" :key="pm" class="memchip">{{ pm }}</div>
+              <div v-if="!ctxUsed.memories.length" class="ctxsub">（本次问题未命中任何记忆）</div>
             </div>
           </div>
         </div>
@@ -137,6 +160,7 @@ pre { margin: 0; padding: 10px 12px; font-size: 12px; line-height: 1.7; overflow
 .ctx { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
 .ctxlabel { font-size: 12px; color: var(--ink3); margin-bottom: 6px; }
 .ctxsub { margin-left: 6px; font-size: 11px; color: var(--ink3); }
+.pillrow { display: flex; flex-wrap: wrap; gap: 6px; }
 .dbpill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 13px; font-size: 12.5px; background: var(--paper); }
 .okdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .memcol { display: flex; flex-direction: column; gap: 5px; }

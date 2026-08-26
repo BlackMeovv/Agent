@@ -34,6 +34,18 @@ watch(
         <span class="okdot"></span>{{ store.env.db }}
       </div>
       <span v-if="store.env?.mock" class="mock">MOCK</span>
+      <button
+        v-if="store.lastAiId"
+        class="paneltoggle"
+        :class="{ on: !!store.panelId }"
+        :title="store.panelId ? '收起运行详情' : '打开运行详情'"
+        @click="store.panelId = store.panelId ? null : store.lastAiId"
+      >
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.3" />
+          <line x1="10" y1="3" x2="10" y2="13.5" stroke="currentColor" stroke-width="1.3" />
+        </svg>
+      </button>
     </div>
 
     <template v-if="store.msgs.length === 0">
@@ -72,6 +84,9 @@ watch(
 .dbpill { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
 .okdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .mock { font-size: 11px; font-weight: 600; color: var(--warn); background: var(--warnbg); border-radius: 4px; padding: 1px 7px; }
+.paneltoggle { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--ink3); cursor: pointer; padding: 0; }
+.paneltoggle:hover { color: var(--ink); border-color: var(--ink3); }
+.paneltoggle.on { color: var(--acc); background: var(--accbg); border-color: transparent; }
 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 24px 60px; }
 .greet { font-size: 34px; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 26px; }
 .cwrap { width: 100%; max-width: 680px; }

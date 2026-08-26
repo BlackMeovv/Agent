@@ -41,6 +41,7 @@ export interface AiMsg {
   usage?: { calls: number; tokens: number; cost: number };
   latencyMs?: number;
   selectedTables?: string[] | null;
+  contextUsed?: { glossary: string[]; examples: string[]; memories: string[] } | null;
 }
 
 export type Msg = UserMsg | AiMsg;
@@ -87,6 +88,10 @@ export const useAppStore = defineStore("app", {
     panelMsg(state): AiMsg | null {
       const m = state.msgs.find((x) => x.id === state.panelId && x.role === "ai");
       return (m as AiMsg) || null;
+    },
+    lastAiId(state): string | null {
+      const m = [...state.msgs].reverse().find((x) => x.role === "ai");
+      return m ? m.id : null;
     },
     title(state): string {
       const c = state.convos.find((x) => x.id === state.curConvo);
@@ -196,6 +201,7 @@ export const useAppStore = defineStore("app", {
             chartError: p.chart_error,
             attempts: p.attempts,
             selectedTables: p.selected_tables,
+            contextUsed: p.context_used,
             usage: { calls: p.usage.llm_calls, tokens: p.usage.total_tokens, cost: p.usage.cost },
             latencyMs: p.latency_ms,
           });

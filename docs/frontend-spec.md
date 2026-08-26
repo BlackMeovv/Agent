@@ -93,6 +93,8 @@ echo "CORS_ALLOW_ORIGINS=http://localhost:5173" >> .env
   "row_count": 4,
   "attempts": [ { "sql": "…", "ok": false, "error_kind": "…", "error_message": "…" } ],
   "selected_tables": ["orders"] ,   // Schema RAG 选表（未启用为 null）
+  // 本次运行实际注入 prompt 的上下文（透明化面板用）；缓存命中或旧版本可能为 null
+  "context_used": { "glossary": ["GMV"], "examples": ["各品类的成交金额"], "memories": ["口径：只统计已完成订单"] },
   "hallucination_blocked": false,   // true=回答被防幻觉拦截降级（UI 应给警示态）
   "chart_url": "/charts/chart-ab12….png",  // 或 null；chart_error 为失败原因
   "chart_error": null,

@@ -27,6 +27,15 @@ class TestMemoryStore:
         MemoryStore(path).remember("u1", "口径 A")
         assert MemoryStore(path).notes("u1")[0][1] == "口径 A"
 
+    def test_duplicate_notes_injected_once(self, tmp_path):
+        store = MemoryStore(tmp_path / "mem.sqlite")
+        for _ in range(3):
+            store.remember("u1", "销售额一律指已完成订单的成交金额")
+        store.remember("u1", "默认只看 2025 年的数据")
+        hits = store.recall("u1", "本月销售额多少？")
+        assert hits.count("销售额一律指已完成订单的成交金额") == 1
+        assert len(hits) == 2
+
     def test_bm25_selection_when_many(self, tmp_path):
         store = MemoryStore(tmp_path / "mem.sqlite")
         for note in ["销售额指成交金额", "毛利按成交价减成本", "会员等级金卡是 2", "城市默认全国", "日期格式 YYYY-MM-DD"]:

@@ -57,6 +57,7 @@ class RunOutcome:
     final_sql: str | None = None  # 实际执行的 SQL（守卫改写后，含注入的 LIMIT）
     predicted_sql: str | None = None  # 模型原始 SQL（评测打分用）
     selected_tables: list[str] | None = None  # Schema RAG 选中的表（未启用时为 None）
+    context_used: dict | None = None  # 本次注入的上下文明细：glossary/examples/memories
     hallucination_blocked: bool = False  # 回答因数字无出处被拦截降级
     chart_path: str | None = None  # 沙箱生成的图表文件（未请求/失败时为 None）
     chart_error: str | None = None
@@ -165,7 +166,7 @@ class InsightAgent:
 
     def _build_schema_context(
         self, question: str, user_id: str = "default"
-    ) -> tuple[str, list[str] | None]:
+    ) -> tuple[str, list[str] | None, dict]:
         """按问题组装 schema 上下文。
 
         大库不能全量塞 prompt（贵且触发 Lost in the Middle）——auto 模式下
@@ -188,13 +189,20 @@ class InsightAgent:
         example_hits = self._examples.top(question, top_n)
         if example_hits:
             context += "\n\n相似问题参考：\n" + "\n\n".join(e.body for e in example_hits)
+        memory_hits: list[str] = []
         if self.memory is not None:
             memory_hits = self.memory.recall(user_id, question, top_n)
             if memory_hits:
                 context += "\n\n该用户的口径偏好（跨会话记忆，优先遵循）：\n" + "\n".join(
                     f"- {m}" for m in memory_hits
                 )
-        return context, selected
+        # 本次实际注入的上下文明细（UI 的"上下文"面板与可解释性用）
+        context_used = {
+            "glossary": [e.key for e in glossary_hits],
+            "examples": [e.key for e in example_hits],
+            "memories": memory_hits,
+        }
+        return context, selected, context_used
 
     # ---------- public ----------
 
@@ -260,7 +268,10 @@ class InsightAgent:
             max_cost=self.settings.agent_max_cost_per_run,
         )
         trace = self.tracer.start_run(question)
-        schema_context, selected_tables = self._build_schema_context(question, user_id=user_id)
+        schema_context, selected_tables, context_used = self._build_schema_context(
+            question, user_id=user_id
+        )
+        self._last_context_used = context_used
         if selected_tables is not None:
             trace.span("schema_rag", metadata={"selected_tables": selected_tables})
         state: _State = {
@@ -293,6 +304,7 @@ class InsightAgent:
             final_sql=executed_sql,
             predicted_sql=raw_sql,
             selected_tables=selected_tables,
+            context_used=getattr(self, "_last_context_used", None),
             hallucination_blocked=final.get("hallucination_blocked", False),
             chart_path=final.get("chart_path"),
             chart_error=final.get("chart_error"),

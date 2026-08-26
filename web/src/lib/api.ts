@@ -46,6 +46,7 @@ export interface FinalPayload {
   row_count: number;
   attempts: Attempt[];
   selected_tables: string[] | null;
+  context_used: { glossary: string[]; examples: string[]; memories: string[] } | null;
   hallucination_blocked: boolean;
   chart_url: string | null;
   chart_error: string | null;

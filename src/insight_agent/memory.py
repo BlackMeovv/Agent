@@ -57,11 +57,14 @@ class MemoryStore:
             ).fetchall()
 
     def recall(self, user_id: str, question: str, top_n: int = 3) -> list[str]:
-        """检索与问题相关的记忆；条目很少时（<= top_n）全部返回。"""
+        """检索与问题相关的记忆；条目很少时（<= top_n）全部返回。
+
+        内容完全相同的重复条目只注入一次——重复不增加信息，还会挤占 top_n 名额。
+        """
         rows = self.notes(user_id)
         if not rows:
             return []
-        texts = [note for _id, note, _ts in rows]
+        texts = list(dict.fromkeys(note for _id, note, _ts in rows))
         if len(texts) <= top_n:
             return texts
         bm25 = BM25([tokenize(t) for t in texts])
