@@ -144,6 +144,18 @@ export const useAppStore = defineStore("app", {
       this.panelId = null;
     },
 
+    delConvo(id: string) {
+      if (id === this.curConvo) {
+        this.stop();
+        this.curConvo = "";
+        this.msgs = [];
+        this.panelId = null;
+        this.draft = "";
+      }
+      this.convos = this.convos.filter((c) => c.id !== id);
+      this.persist();
+    },
+
     // ---- 记忆 ----
     async addMem(note: string) {
       await addMemory(note);

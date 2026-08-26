@@ -92,7 +92,8 @@ function addMem() {
         :class="{ cur: cv.id === store.curConvo }"
         @click="store.pickConvo(cv.id)"
       >
-        {{ cv.title }}
+        <span class="htext">{{ cv.title }}</span>
+        <span class="hdel" title="删除会话" @click.stop="store.delConvo(cv.id)">✕</span>
       </div>
     </div>
 
@@ -143,9 +144,13 @@ function addMem() {
 .madd { align-self: flex-start; border: none; background: none; color: var(--acc); font-size: 12px; cursor: pointer; padding: 2px 4px; }
 .divider { height: 1px; background: var(--line); margin: 14px 6px 8px; }
 .histlabel { padding: 0 10px 4px; font-size: 12px; color: var(--ink3); }
-.hist { padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; color: var(--ink2); }
 .hist:hover { background: var(--soft); }
 .hist.cur { background: var(--soft); color: var(--ink); }
+.htext { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hdel { visibility: hidden; flex: none; color: var(--ink3); font-size: 11px; line-height: 1; padding: 2px; border-radius: 4px; }
+.hist:hover .hdel { visibility: visible; }
+.hdel:hover { color: var(--err); background: var(--errbg); }
 .foot { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accbg); color: var(--acc); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
 .uname { font-size: 13px; color: var(--ink2); }
