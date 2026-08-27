@@ -51,6 +51,7 @@ def run_eval(
     repeats: int = 1,
     label: str | None = None,
     db_root: str | Path | None = None,
+    sleep_seconds: float = 0.0,
 ) -> dict:
     settings = get_settings()
     from ..tools.engines import is_server_dsn
@@ -145,6 +146,10 @@ def run_eval(
             mark, color = ("✓", "green") if score.match else ("✗", "red")
             prefix = f"[r{r + 1}] " if repeats > 1 else ""
             console.print(f"[{color}]{mark}[/] {prefix}{case['id']} {case['question'][:60]}")
+
+            # 限流温和的中转站用 --sleep 拉开调用间隔，避免触发 RPM 封禁
+            if sleep_seconds > 0 and not gold_replay:
+                time.sleep(sleep_seconds)
 
             llm_dead = outcome.status == "failed" and outcome.predicted_sql is None
             consecutive_llm_failures = consecutive_llm_failures + 1 if llm_dead else 0
@@ -258,6 +263,9 @@ def main() -> None:
     parser.add_argument("--db-root", default=None, help="case 内相对 db 路径的根目录")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--out", default=None)
+    parser.add_argument(
+        "--sleep", type=float, default=0.0, help="每题之间的间隔秒数（应对限流严格的中转站）"
+    )
     args = parser.parse_args()
     report = run_eval(
         args.cases,
@@ -267,6 +275,7 @@ def main() -> None:
         repeats=args.repeats,
         label=args.label,
         db_root=args.db_root,
+        sleep_seconds=args.sleep,
     )
     if args.gold_replay and report["summary"]["ex_accuracy"] < 1.0:
         raise SystemExit("gold-replay 未达 100%：评测基建存在 bug，请先修复")
