@@ -1,0 +1,444 @@
+{
+  "summary": {
+    "label": "smoke-llm",
+    "mode": "llm",
+    "model": "gpt-5.5",
+    "cases": 20,
+    "repeats": 1,
+    "trials": 20,
+    "ex_matched": 19,
+    "ex_accuracy": 0.95,
+    "wilson_low": 0.7639,
+    "wilson_high": 0.9911,
+    "per_repeat_accuracy": [
+      0.95
+    ],
+    "avg_table_recall": null,
+    "total_cost": 0.010073,
+    "total_tokens": 28109,
+    "avg_latency_ms": 5415,
+    "wall_seconds": 108.4
+  },
+  "results": [
+    {
+      "id": "smoke-01",
+      "question": "上海的客户一共有多少个？",
+      "gold_sql": "SELECT COUNT(*) FROM customers WHERE city = '上海'",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1328,
+      "cost": 0.000408,
+      "avg_latency_ms": 2950,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT COUNT(*) AS customer_count\nFROM customers\nWHERE city = '上海'",
+      "executed_sql": "SELECT COUNT(*) AS customer_count FROM customers WHERE city = '上海' LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-02",
+      "question": "钻石会员（vip_level 为 3）有多少人？",
+      "gold_sql": "SELECT COUNT(*) FROM customers WHERE vip_level = 3",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1281,
+      "cost": 0.000398,
+      "avg_latency_ms": 2672,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT COUNT(*) AS diamond_customer_count\nFROM customers\nWHERE vip_level = 3",
+      "executed_sql": "SELECT COUNT(*) AS diamond_customer_count FROM customers WHERE vip_level = 3 LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-03",
+      "question": "售价最高的商品是哪个？给出商品名和售价。",
+      "gold_sql": "SELECT name, price FROM products ORDER BY price DESC LIMIT 1",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1365,
+      "cost": 0.000468,
+      "avg_latency_ms": 4141,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  name,\n  price\nFROM products\nWHERE price = (SELECT MAX(price) FROM products)",
+      "executed_sql": "SELECT name, price FROM products WHERE price = (SELECT MAX(price) FROM products) LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-04",
+      "question": "2025年1月一共产生了多少笔订单？",
+      "gold_sql": "SELECT COUNT(*) FROM orders WHERE order_date >= '2025-01-01' AND order_date <= '2025-01-31'",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1383,
+      "cost": 0.00048,
+      "avg_latency_ms": 3814,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT COUNT(*) AS order_count\nFROM orders\nWHERE order_date >= '2025-01-01'\n  AND order_date < '2025-02-01'",
+      "executed_sql": "SELECT COUNT(*) AS order_count FROM orders WHERE order_date >= '2025-01-01' AND order_date < '2025-02-01' LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-05",
+      "question": "各个订单状态分别有多少笔订单？",
+      "gold_sql": "SELECT status, COUNT(*) FROM orders GROUP BY status",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1327,
+      "cost": 0.000421,
+      "avg_latency_ms": 3356,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  status,\n  COUNT(*) AS order_count\nFROM orders\nGROUP BY status\nORDER BY order_count DESC",
+      "executed_sql": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status ORDER BY order_count DESC LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-06",
+      "question": "每个商品品类下各有多少个商品？",
+      "gold_sql": "SELECT c.name, COUNT(*) FROM categories c JOIN products p ON p.category_id = c.id GROUP BY c.name",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1377,
+      "cost": 0.000483,
+      "avg_latency_ms": 3784,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  c.name AS category_name,\n  COUNT(p.id) AS product_count\nFROM categories AS c\nLEFT JOIN products AS p\n  ON p.category_id = c.id\nGROUP BY\n  c.id,\n  c.name\nORDER BY\n  c.id",
+      "executed_sql": "SELECT c.name AS category_name, COUNT(p.id) AS product_count FROM categories AS c LEFT JOIN products AS p ON p.category_id = c.id GROUP BY c.id, c.name ORDER BY c.id LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-07",
+      "question": "手机数码品类里售价最贵的商品是什么？给出名称和售价。",
+      "gold_sql": "SELECT p.name, p.price FROM products p JOIN categories c ON p.category_id = c.id WHERE c.name = '手机数码' ORDER BY p.price DESC LIMIT 1",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1388,
+      "cost": 0.000489,
+      "avg_latency_ms": 4092,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  p.name,\n  p.price\nFROM products AS p\nJOIN categories AS c\n  ON p.category_id = c.id\nWHERE c.name = '手机数码'\nORDER BY p.price DESC\nLIMIT 1",
+      "executed_sql": "SELECT p.name, p.price FROM products AS p JOIN categories AS c ON p.category_id = c.id WHERE c.name = '手机数码' ORDER BY p.price DESC LIMIT 1",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-08",
+      "question": "下单次数最多的前5名客户是谁？给出客户名和下单次数，次数相同按客户名排序。",
+      "gold_sql": "SELECT c.name, COUNT(*) AS cnt FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.id ORDER BY cnt DESC, c.name LIMIT 5",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1419,
+      "cost": 0.00052,
+      "avg_latency_ms": 5211,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  c.name AS customer_name,\n  COUNT(o.id) AS order_count\nFROM customers AS c\nJOIN orders AS o\n  ON c.id = o.customer_id\nGROUP BY\n  c.id,\n  c.name\nORDER BY\n  order_count DESC,\n  c.name ASC\nLIMIT 5",
+      "executed_sql": "SELECT c.name AS customer_name, COUNT(o.id) AS order_count FROM customers AS c JOIN orders AS o ON c.id = o.customer_id GROUP BY c.id, c.name ORDER BY order_count DESC, c.name ASC LIMIT 5",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-09",
+      "question": "北京的客户总共下了多少笔订单？",
+      "gold_sql": "SELECT COUNT(*) FROM orders o JOIN customers c ON o.customer_id = c.id WHERE c.city = '北京'",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1435,
+      "cost": 0.000539,
+      "avg_latency_ms": 6763,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT COUNT(o.id) AS order_count\nFROM customers AS c\nLEFT JOIN orders AS o\n  ON o.customer_id = c.id\nWHERE c.city = '北京'",
+      "executed_sql": "SELECT COUNT(o.id) AS order_count FROM customers AS c LEFT JOIN orders AS o ON o.customer_id = c.id WHERE c.city = '北京' LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-10",
+      "question": "每个城市各有多少客户？按客户数从多到少排列。",
+      "gold_sql": "SELECT city, COUNT(*) AS cnt FROM customers GROUP BY city ORDER BY cnt DESC",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1291,
+      "cost": 0.000411,
+      "avg_latency_ms": 13821,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    city,\n    COUNT(*) AS customer_count\nFROM customers\nGROUP BY city\nORDER BY customer_count DESC",
+      "executed_sql": "SELECT city, COUNT(*) AS customer_count FROM customers GROUP BY city ORDER BY customer_count DESC LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-11",
+      "question": "所有已完成（completed）订单的成交总金额是多少？成交金额按订单明细的数量乘以成交单价计算。",
+      "gold_sql": "SELECT SUM(oi.quantity * oi.unit_price) FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE o.status = 'completed'",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1366,
+      "cost": 0.000455,
+      "avg_latency_ms": 3390,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    SUM(oi.quantity * oi.unit_price) AS total_completed_amount\nFROM orders AS o\nJOIN order_items AS oi\n    ON o.id = oi.order_id\nWHERE o.status = 'completed'",
+      "executed_sql": "SELECT SUM(oi.quantity * oi.unit_price) AS total_completed_amount FROM orders AS o JOIN order_items AS oi ON o.id = oi.order_id WHERE o.status = 'completed' LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-12",
+      "question": "按销量（销售数量合计）最高的前5个商品是哪些？给出商品名和销量。",
+      "gold_sql": "SELECT p.name, SUM(oi.quantity) AS qty FROM order_items oi JOIN products p ON oi.product_id = p.id GROUP BY p.id ORDER BY qty DESC LIMIT 5",
+      "db": null,
+      "ex_by_repeat": [
+        false
+      ],
+      "success_rate": 0.0,
+      "table_recall": null,
+      "tokens": 1629,
+      "cost": 0.00075,
+      "avg_latency_ms": 8689,
+      "ex": false,
+      "reason": "行内容或顺序不一致",
+      "status": "ok",
+      "pred_sql": "SELECT\n    p.name AS product_name,\n    SUM(oi.quantity) AS sales_quantity\nFROM order_items AS oi\nJOIN products AS p\n    ON oi.product_id = p.id\nGROUP BY\n    p.id,\n    p.name\nORDER BY\n    sales_quantity DESC\nLIMIT 5",
+      "executed_sql": "SELECT p.name AS product_name, SUM(oi.quantity) AS sales_quantity FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id GROUP BY p.id, p.name ORDER BY sales_quantity DESC LIMIT 5",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-13",
+      "question": "每个品类的成交总金额分别是多少？成交金额按明细数量乘以成交单价计算。",
+      "gold_sql": "SELECT c.name, SUM(oi.quantity * oi.unit_price) FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN categories c ON p.category_id = c.id GROUP BY c.id",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1581,
+      "cost": 0.000695,
+      "avg_latency_ms": 7267,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    c.name AS category_name,\n    COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_transaction_amount\nFROM categories AS c\nLEFT JOIN products AS p\n    ON p.category_id = c.id\nLEFT JOIN order_items AS oi\n    ON oi.product_id = p.id\nGROUP BY\n    c.id,\n    c.name\nORDER BY\n    total_transaction_amount DESC",
+      "executed_sql": "SELECT c.name AS category_name, COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_transaction_amount FROM categories AS c LEFT JOIN products AS p ON p.category_id = c.id LEFT JOIN order_items AS oi ON oi.product_id = p.id GROUP BY c.id, c.name ORDER BY total_transaction_amount DESC LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-14",
+      "question": "平均每笔订单包含多少件商品（按明细数量合计）？",
+      "gold_sql": "SELECT AVG(cnt) FROM (SELECT SUM(quantity) AS cnt FROM order_items GROUP BY order_id)",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1453,
+      "cost": 0.000554,
+      "avg_latency_ms": 5331,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    AVG(order_quantity) AS avg_items_per_order\nFROM (\n    SELECT\n        o.id AS order_id,\n        COALESCE(SUM(oi.quantity), 0) AS order_quantity\n    FROM orders o\n    LEFT JOIN order_items oi ON o.id = oi.order_id\n    GROUP BY o.id\n) t",
+      "executed_sql": "SELECT AVG(order_quantity) AS avg_items_per_order FROM (SELECT o.id AS order_id, COALESCE(SUM(oi.quantity), 0) AS order_quantity FROM orders AS o LEFT JOIN order_items AS oi ON o.id = oi.order_id GROUP BY o.id) AS t LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-15",
+      "question": "每种支付方式分别有多少笔支付、总金额多少？",
+      "gold_sql": "SELECT method, COUNT(*), SUM(amount) FROM payments GROUP BY method",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1360,
+      "cost": 0.000444,
+      "avg_latency_ms": 6536,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    method AS payment_method,\n    COUNT(*) AS payment_count,\n    SUM(amount) AS total_amount\nFROM payments\nGROUP BY method\nORDER BY total_amount DESC",
+      "executed_sql": "SELECT method AS payment_method, COUNT(*) AS payment_count, SUM(amount) AS total_amount FROM payments GROUP BY method ORDER BY total_amount DESC LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-16",
+      "question": "2025年上半年（1月到6月）每个月的支付总金额是多少？按月份排列。",
+      "gold_sql": "SELECT strftime('%Y-%m', paid_at) AS month, SUM(amount) FROM payments WHERE paid_at >= '2025-01-01' AND paid_at <= '2025-06-30' GROUP BY month ORDER BY month",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1450,
+      "cost": 0.000535,
+      "avg_latency_ms": 4906,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  strftime('%Y-%m', paid_at) AS month,\n  SUM(amount) AS total_payment_amount\nFROM payments\nWHERE paid_at >= '2025-01-01'\n  AND paid_at < '2025-07-01'\nGROUP BY strftime('%Y-%m', paid_at)\nORDER BY month",
+      "executed_sql": "SELECT STRFTIME('%Y-%m', paid_at) AS month, SUM(amount) AS total_payment_amount FROM payments WHERE paid_at >= '2025-01-01' AND paid_at < '2025-07-01' GROUP BY STRFTIME('%Y-%m', paid_at) ORDER BY month LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-17",
+      "question": "金卡及以上（vip_level 大于等于 2）客户的平均单笔支付金额是多少？",
+      "gold_sql": "SELECT AVG(p.amount) FROM payments p JOIN orders o ON p.order_id = o.id JOIN customers c ON o.customer_id = c.id WHERE c.vip_level >= 2",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1437,
+      "cost": 0.000516,
+      "avg_latency_ms": 5633,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    AVG(payments.amount) AS avg_payment_amount\nFROM payments\nJOIN orders ON payments.order_id = orders.id\nJOIN customers ON orders.customer_id = customers.id\nWHERE customers.vip_level >= 2",
+      "executed_sql": "SELECT AVG(payments.amount) AS avg_payment_amount FROM payments JOIN orders ON payments.order_id = orders.id JOIN customers ON orders.customer_id = customers.id WHERE customers.vip_level >= 2 LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-18",
+      "question": "注册之后从来没有下过订单的客户有多少个？",
+      "gold_sql": "SELECT COUNT(*) FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1345,
+      "cost": 0.000438,
+      "avg_latency_ms": 6862,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT COUNT(*) AS silent_customer_count\nFROM customers AS c\nWHERE NOT EXISTS (\n    SELECT 1\n    FROM orders AS o\n    WHERE o.customer_id = c.id\n)",
+      "executed_sql": "SELECT COUNT(*) AS silent_customer_count FROM customers AS c WHERE NOT EXISTS(SELECT 1 FROM orders AS o WHERE o.customer_id = c.id) LIMIT 200",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-19",
+      "question": "支付总金额最高的前3个城市是哪几个？给出城市和金额。",
+      "gold_sql": "SELECT c.city, SUM(p.amount) AS total FROM payments p JOIN orders o ON p.order_id = o.id JOIN customers c ON o.customer_id = c.id GROUP BY c.city ORDER BY total DESC LIMIT 3",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1436,
+      "cost": 0.000525,
+      "avg_latency_ms": 4598,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n  c.city,\n  SUM(p.amount) AS total_payment_amount\nFROM payments AS p\nJOIN orders AS o\n  ON p.order_id = o.id\nJOIN customers AS c\n  ON o.customer_id = c.id\nGROUP BY c.city\nORDER BY total_payment_amount DESC\nLIMIT 3",
+      "executed_sql": "SELECT c.city, SUM(p.amount) AS total_payment_amount FROM payments AS p JOIN orders AS o ON p.order_id = o.id JOIN customers AS c ON o.customer_id = c.id GROUP BY c.city ORDER BY total_payment_amount DESC LIMIT 3",
+      "attempts": 1,
+      "error_kinds": []
+    },
+    {
+      "id": "smoke-20",
+      "question": "按毛利（成交单价减去成本，再乘以数量）计算，毛利最高的品类是哪个？给出品类名和毛利。",
+      "gold_sql": "SELECT c.name, SUM((oi.unit_price - p.cost) * oi.quantity) AS profit FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN categories c ON p.category_id = c.id GROUP BY c.id ORDER BY profit DESC LIMIT 1",
+      "db": null,
+      "ex_by_repeat": [
+        true
+      ],
+      "success_rate": 1.0,
+      "table_recall": null,
+      "tokens": 1458,
+      "cost": 0.000544,
+      "avg_latency_ms": 4499,
+      "ex": true,
+      "reason": "",
+      "status": "ok",
+      "pred_sql": "SELECT\n    c.name AS category_name,\n    SUM((oi.unit_price - p.cost) * oi.quantity) AS gross_profit\nFROM order_items AS oi\nJOIN products AS p\n    ON oi.product_id = p.id\nJOIN categories AS c\n    ON p.category_id = c.id\nGROUP BY\n    c.id,\n    c.name\nORDER BY\n    gross_profit DESC\nLIMIT 1",
+      "executed_sql": "SELECT c.name AS category_name, SUM((oi.unit_price - p.cost) * oi.quantity) AS gross_profit FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id JOIN categories AS c ON p.category_id = c.id GROUP BY c.id, c.name ORDER BY gross_profit DESC LIMIT 1",
+      "attempts": 1,
+      "error_kinds": []
+    }
+  ]
+}
