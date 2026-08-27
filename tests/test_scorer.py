@@ -59,3 +59,41 @@ class TestComparison:
     def test_broken_gold_raises(self, demo_db_path):
         with pytest.raises(ValueError):
             execution_match(demo_db_path, "SELECT 1", "SELECT * FROM ghosts")
+
+
+class TestTieTolerance:
+    """gold 有 ORDER BY 且排序键并列时，组内顺序无关（B3 修复的回归测试）。"""
+
+    GOLD = (
+        "SELECT p.name, SUM(oi.quantity) AS qty FROM order_items oi "
+        "JOIN products p ON oi.product_id = p.id GROUP BY p.id ORDER BY qty DESC LIMIT 10"
+    )
+    PRED_TIEBREAK = (
+        "SELECT p.name, SUM(oi.quantity) AS qty FROM order_items oi "
+        "JOIN products p ON oi.product_id = p.id GROUP BY p.id ORDER BY qty DESC, p.id LIMIT 10"
+    )
+
+    def test_tie_order_within_group_accepted(self, demo_db_path):
+        # 演示库前 10 销量存在并列（228/228、227/227），pred 加决胜键后组内顺序不同
+        assert execution_match(demo_db_path, self.PRED_TIEBREAK, self.GOLD).match
+
+    def test_wrong_direction_still_rejected(self, demo_db_path):
+        pred = self.GOLD.replace("qty DESC", "qty ASC")
+        assert not execution_match(demo_db_path, pred, self.GOLD).match
+
+    def test_ordinal_order_by_resolved(self, demo_db_path):
+        gold = self.GOLD.replace("ORDER BY qty DESC", "ORDER BY 2 DESC")
+        assert execution_match(demo_db_path, self.PRED_TIEBREAK, gold).match
+
+    def test_unresolvable_order_expr_stays_strict(self):
+        from insight_agent.evalkit.scorer import _order_key_indexes
+
+        assert _order_key_indexes(
+            "SELECT name FROM products ORDER BY length(name)", ["name"]
+        ) is None
+        assert _order_key_indexes(
+            "SELECT name FROM products ORDER BY qty", ["name"]
+        ) is None  # 排序键不在输出列里
+        assert _order_key_indexes(
+            "SELECT name, qty FROM t ORDER BY qty DESC", ["name", "qty"]
+        ) == [1]
