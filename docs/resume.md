@@ -1,6 +1,6 @@
-# 简历措辞终稿（数字占位，跑出真实结果后填入）
+# 简历措辞终稿（主数字已全部为实测值）
 
-> 铁律：所有 `__` 必须换成你自己跑出来、可复现的数字。没跑出来的一律不写。
+> 铁律：每个数字都是自己跑出来、可复现的。没跑出来的一律不写。
 > 面试预案见 `docs/plan.md` 第八节；每一条 bullet 都能被追问三层，确保你亲手跑过。
 
 ## 项目名与一句话定位
@@ -35,7 +35,7 @@ gold 逐条执行校验）、EX 执行准确率、gold 回放基建自检、Wils
 held-out 密封集复核 97.7%——提升无过拟合；BIRD 公开基准 150 题固定子集 EX 61.3%、
 Schema RAG 选表召回率 95.5%）；工程化交付 FastAPI SSE 流式服务、
 Vue3 前端、结果缓存、Prometheus/Grafana 监控、Langfuse 链路追踪、Docker 一键部署，
-249 例离线测试接入 CI。
+256 例离线测试接入 CI。
 
 > 用法：两段式用于简历正文；下面的 bullet 版用于篇幅紧的模板或投递系统逐条填写。
 > 两处的 `__` 同样必须用真实跑出的数字替换。
@@ -55,14 +55,14 @@ Vue3 前端、结果缓存、Prometheus/Grafana 监控、Langfuse 链路追踪�
    +4.5pp、CI 不重叠、按题配对翻转 5:0，71 题 held-out 复核 97.7%**；
    bad case 按 7 类失败模式复盘
 4. 实现**结论防幻觉校验**：回答中每个数字与查询结果精确比对（支持千分位/百分号/万亿单位的
-   舍入匹配），无出处即重写、再失败降级为确定性结果，评测期拦截率 __%
+   舍入匹配），无出处即重写、再失败降级为确定性结果——宁可不出稿，不说错数
 5. **安全纵深**：sqlglot AST 守卫（单条 SELECT/表白名单/强制 LIMIT）+ SQLite 三重只读
    （mode=ro/query_only/authorizer）+ 图表代码 Docker 沙箱（断网/内存/CPU 限额 + 静态拒绝清单）
-6. **生产化**：FastAPI+SSE 流式服务、Redis 结果缓存、Langfuse 全链路追踪与成本记账
-   （单次查询 $__）、Prometheus/Grafana 监控大盘、locust 压测 QPS __ / P95 __ms、
-   docker compose 一键部署、自研 MCP server 接入 Claude Desktop、跨会话口径记忆
-7. 工程质量：__ 个离线单元/集成测试（不依赖 API Key），覆盖守卫绕过、并发串扰、
-   评测判分边界等回归场景
+6. **生产化**：FastAPI+SSE 流式服务、Redis 结果缓存、Langfuse 全链路追踪与成本记账、
+   Prometheus/Grafana 监控大盘、docker compose 一键部署、自研 MCP server 接入
+   Claude Desktop、跨会话口径记忆（业务集单题约 5.4k tokens、平均延迟约 14s@推理模型）
+7. 工程质量：256 个离线单元/集成测试（不依赖 API Key），覆盖守卫绕过、畸形 SQL、
+   评测判分边界、排序并列等回归场景
 
 ## 不同投递对象的裁剪
 
