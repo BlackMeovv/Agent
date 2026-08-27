@@ -126,6 +126,90 @@ def _cmd_forget(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _cmd_check_api(_args: argparse.Namespace) -> int:
+    """API 体检：验证第三方/中转接口能支撑本项目的全部依赖点。
+
+    共 4 项：1 配置 2 连通与延迟 3 token 用量回传 4 SQL 围栏格式遵循。
+    本项目不使用 function calling，不检查工具调用兼容性。
+    """
+    from .agent.graph import extract_sql
+    from .budget import UsageMeter
+    from .config import get_settings
+    from .llm import LLMClient, LLMError
+
+    settings = get_settings()
+    failed = warned = False
+
+    key = settings.llm_api_key or ""
+    masked = f"{key[:6]}…{key[-4:]}" if len(key) > 12 else ("(未配置)" if not key else "(过短?)")
+    console.print("[bold]1/4 配置[/bold]")
+    console.print(f"    base_url = {escape(settings.llm_base_url)}")
+    console.print(f"    model    = {escape(settings.llm_model)}")
+    console.print(f"    api_key  = {masked}")
+    if not key:
+        console.print("[red]    ✗ LLM_API_KEY 为空，先编辑 .env[/red]")
+        return 1
+
+    meter = UsageMeter(
+        price_input_per_m=settings.llm_price_input_per_m,
+        price_output_per_m=settings.llm_price_output_per_m,
+    )
+    llm = LLMClient(settings)
+
+    console.print("[bold]2/4 连通与延迟[/bold]")
+    try:
+        reply = llm.chat(
+            [{"role": "user", "content": "只回复两个字：正常"}], meter, tag="check"
+        )
+        console.print(
+            f"    [green]✓[/green] 收到回复（{reply.latency_ms} ms）：{escape(reply.text.strip()[:40])}"
+        )
+    except LLMError as e:
+        console.print(f"[red]    ✗ 调用失败：{escape(str(e))}[/red]")
+        console.print("    排查：base_url 是否带 /v1 后缀、key 是否有效、模型名是否是该中转站支持的写法")
+        return 1
+
+    console.print("[bold]3/4 token 用量回传[/bold]（影响成本统计的准确性）")
+    if meter.unmetered_calls:
+        warned = True
+        console.print("    [yellow]![/yellow] 上游未返回 usage，已按字符保守估算——成本数字是近似值，评测结论不受影响")
+    else:
+        console.print(f"    [green]✓[/green] 正常回传（本次 {meter.total_tokens} tokens）")
+
+    console.print("[bold]4/4 SQL 围栏格式遵循[/bold]（本项目靠 ```sql 代码块提取 SQL，不用 function calling）")
+    try:
+        reply = llm.chat(
+            [{
+                "role": "user",
+                "content": "请只输出一个 ```sql 代码块，内容为：SELECT 1 AS ok。不要输出任何其他内容。",
+            }],
+            meter,
+            tag="check",
+        )
+        sql = extract_sql(reply.text)
+        if sql and sql.lower().lstrip().startswith("select"):
+            console.print(f"    [green]✓[/green] 提取成功：{escape(sql[:60])}")
+        else:
+            failed = True
+            console.print(f"    [red]✗ 未能从回复中提取 SQL，原文前 120 字：{escape(reply.text[:120])}[/red]")
+            console.print("    该模型不遵循代码块指令，换模型名重试（记下试过的模型与结果）")
+    except LLMError as e:
+        failed = True
+        console.print(f"[red]    ✗ 调用失败：{escape(str(e))}[/red]")
+
+    console.print(
+        f"[dim]本次体检消耗 {meter.total_tokens} tokens · 约 {meter.cost:.6f} 元[/dim]"
+    )
+    if failed:
+        console.print("[red]体检未通过：第 4 项失败会直接影响主流程，先解决再跑评测。[/red]")
+        return 1
+    if warned:
+        console.print("[yellow]体检通过（带警告）：可以继续 make smoke。[/yellow]")
+    else:
+        console.print("[green]体检全部通过：可以跑 make smoke 了。[/green]")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="insight-agent", description="企业数据分析 Agent")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -149,6 +233,9 @@ def main() -> None:
 
     demo = sub.add_parser("demo-db", help="生成演示数据库")
     demo.set_defaults(func=_cmd_demo_db)
+
+    check = sub.add_parser("check-api", help="API 体检：连通/延迟/usage 回传/SQL 围栏遵循（4 项，花费忽略不计）")
+    check.set_defaults(func=_cmd_check_api)
 
     serve = sub.add_parser("serve", help="启动 FastAPI 服务（SSE + 演示网页 + /metrics）")
     serve.set_defaults(func=_cmd_serve)

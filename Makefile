@@ -12,6 +12,9 @@ test:               ## 离线测试（不需要 API Key）
 smoke-gold:         ## 离线自检评测基建：gold 回放必须 100%
 	uv run python -m insight_agent.evalkit.runner --cases eval/cases/smoke.jsonl --gold-replay
 
+check-api:          ## API 体检：连通/延迟/usage 回传/SQL 围栏遵循（需要 .env，花费忽略不计）
+	uv run insight-agent check-api
+
 smoke:              ## 真实 LLM 跑冒烟评测（需要 .env）
 	uv run python -m insight_agent.evalkit.runner --cases eval/cases/smoke.jsonl
 
