@@ -95,7 +95,14 @@ def run_eval(
     per_repeat_accuracy: list[float] = []
     started = time.monotonic()
 
+    # 连续 LLM 失败熔断：API 断供（余额耗尽/限流封禁）时中止评测，
+    # 避免把剩余几百次注定失败的调用跑完——那既烧钱又产出无效数字
+    consecutive_llm_failures = 0
+    aborted_reason: str | None = None
+
     for r in range(repeats):
+        if aborted_reason:
+            break
         matched = 0
         for case in cases:
             db_path = resolve_db_path(case)
@@ -138,9 +145,21 @@ def run_eval(
             mark, color = ("✓", "green") if score.match else ("✗", "red")
             prefix = f"[r{r + 1}] " if repeats > 1 else ""
             console.print(f"[{color}]{mark}[/] {prefix}{case['id']} {case['question'][:60]}")
+
+            llm_dead = outcome.status == "failed" and outcome.predicted_sql is None
+            consecutive_llm_failures = consecutive_llm_failures + 1 if llm_dead else 0
+            if consecutive_llm_failures >= 8 and not gold_replay:
+                aborted_reason = (
+                    f"连续 {consecutive_llm_failures} 题 LLM 调用失败，判定 API 断供"
+                    "（余额耗尽/限流封禁/模型下线），评测中止。"
+                    "请先 `make check-api` 排查，再重新完整跑一轮——本次结果无效，不要引用。"
+                )
+                console.print(f"[red]{aborted_reason}[/red]")
+                break
         per_repeat_accuracy.append(round(matched / len(cases), 4) if cases else 0.0)
 
-    total_trials = repeats * len(cases)
+    # 中止的跑批只统计实际发生的 trial，数字不被"没跑的题"稀释
+    total_trials = sum(len(e["ex_by_repeat"]) for e in per_case.values())
     pooled = sum(sum(e["ex_by_repeat"]) for e in per_case.values())
     low, high = wilson_interval(pooled, total_trials)
 
@@ -148,19 +167,21 @@ def run_eval(
     for case in cases:
         entry = per_case[case["id"]]
         recalls = entry.get("table_recall")
+        trials = entry["ex_by_repeat"]
+        latencies = entry["latency"]
         results.append(
             {
                 "id": case["id"],
                 "question": case["question"],
                 "gold_sql": case["gold_sql"],
                 "db": case.get("db"),
-                "ex_by_repeat": entry["ex_by_repeat"],
-                "success_rate": round(sum(entry["ex_by_repeat"]) / repeats, 4),
+                "ex_by_repeat": trials,
+                "success_rate": round(sum(trials) / len(trials), 4) if trials else 0.0,
                 "table_recall": round(sum(recalls) / len(recalls), 4) if recalls else None,
                 "tokens": entry["tokens"],
                 "cost": round(entry["cost"], 6),
-                "avg_latency_ms": int(sum(entry["latency"]) / len(entry["latency"])),
-                **entry["last"],
+                "avg_latency_ms": int(sum(latencies) / len(latencies)) if latencies else 0,
+                **entry.get("last", {}),  # 中止的跑批里未执行到的题没有 last
             }
         )
 
@@ -192,6 +213,7 @@ def run_eval(
             int(sum(r["avg_latency_ms"] for r in results) / len(results)) if results else 0
         ),
         "wall_seconds": round(time.monotonic() - started, 1),
+        "aborted": aborted_reason,  # 非 None = API 断供中止，本报告数字无效
     }
 
     report = {"summary": summary, "results": results}
@@ -202,6 +224,8 @@ def run_eval(
         out_path = out_dir / f"{summary['label']}-{stamp}.json"
     Path(out_path).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    if aborted_reason:
+        console.print(f"[red bold]⚠ 本次评测已中止，报告仅供排查，数字无效：{aborted_reason}[/red bold]")
     table = Table(title=f"EX 结果 · {summary['label']}")
     table.add_column("指标")
     table.add_column("值", justify="right")
@@ -217,9 +241,10 @@ def run_eval(
     table.add_row("报告文件", str(out_path))
     console.print(table)
     for r_ in results:
-        if r_["success_rate"] < 1.0:
+        if r_["success_rate"] < 1.0 and r_["ex_by_repeat"]:  # 中止后未执行到的题不逐条刷屏
             console.print(
-                f"[red]未通过[/red] {r_['id']} (成功率 {r_['success_rate']:.0%}): {r_['reason']}"
+                f"[red]未通过[/red] {r_['id']} (成功率 {r_['success_rate']:.0%}): "
+                f"{r_.get('reason', '未执行')}"
             )
     return report
 

@@ -133,3 +133,51 @@ class TestUnmeteredAccounting:
         agent = make_agent(settings, db, [sql_reply("SELECT COUNT(*) FROM customers")])
         outcome = agent.ask("客户数？", generate_answer=False)
         assert "unmetered_calls" in outcome.usage
+
+
+class TestRunnerAbortOnApiOutage:
+    """API 断供（余额耗尽/限流封禁）时评测应熔断中止，而不是烧完全部调用。"""
+
+    def test_consecutive_llm_failures_abort(self, demo_db_path, tmp_path, monkeypatch):
+        import json
+
+        from insight_agent.evalkit import runner as runner_mod
+        from insight_agent.llm import BaseLLM, LLMError
+
+        class DeadLLM(BaseLLM):
+            model_name = "dead"
+
+            def chat(self, messages, meter, tag=""):
+                raise LLMError("insufficient quota")
+
+        monkeypatch.setattr(runner_mod, "LLMClient", lambda _settings: DeadLLM())
+        monkeypatch.setenv("DB_PATH", str(demo_db_path))
+        from insight_agent.config import get_settings
+
+        get_settings.cache_clear()
+        cases_file = tmp_path / "cases.jsonl"
+        cases_file.write_text(
+            "\n".join(
+                json.dumps(
+                    {
+                        "id": f"c{i}",
+                        "question": "客户有多少个？",
+                        "gold_sql": "SELECT COUNT(*) FROM customers",
+                    },
+                    ensure_ascii=False,
+                )
+                for i in range(12)
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        try:
+            report = runner_mod.run_eval(cases_file, repeats=3, out_path=tmp_path / "r.json")
+        finally:
+            get_settings.cache_clear()
+        summary = report["summary"]
+        assert summary["aborted"]
+        assert summary["trials"] == 8  # 熔断阈值处停下：只发生了 8 次 trial，而非 36 次
+        assert summary["ex_accuracy"] == 0.0
+        # 没跑到的题不应让报告崩溃（无 last、空延迟列表）
+        assert len(report["results"]) == 12
