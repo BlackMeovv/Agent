@@ -6,3 +6,4 @@
 {"term": "沉默客户", "definition": "注册后从未下过订单的客户：customers 中不存在对应 orders 记录的客户"}
 {"term": "金卡及以上", "definition": "customers.vip_level >= 2（0 普通、1 银卡、2 金卡、3 钻石）"}
 {"term": "已完成订单", "definition": "orders.status = 'completed'"}
+{"term": "销量", "definition": "销售数量合计：SUM(order_items.quantity)。统计销量时不区分订单状态（含全部订单的明细），除非用户明确要求剔除某种状态"}
