@@ -14,7 +14,8 @@ build/
 data/demo/*.sqlite
 data/charts/
 data/memory.sqlite
-eval/results/
+# eval/results 有意纳入版本管理：评测报告是"数字可复现"的证据
+# （体积小的 JSON 摘要；如未来引入大文件再按文件名单独忽略）
 docker/dbs/*/10-data.sql
 *.log
 
