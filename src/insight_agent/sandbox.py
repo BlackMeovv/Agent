@@ -76,14 +76,22 @@ class SubprocessSandbox(BaseSandbox):
                 "HOME": workdir,
             }
 
-            def limits():  # 子进程资源限额（POSIX）
+            def limits():  # 子进程资源限额（POSIX，逐项 best-effort）
                 import resource
 
                 mem = self.memory_mb * 1024 * 1024
-                resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
                 cpu = max(1, int(self.timeout_seconds))
-                resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
-                resource.setrlimit(resource.RLIMIT_FSIZE, (20 * 1024 * 1024, 20 * 1024 * 1024))
+                for res, lim in (
+                    (resource.RLIMIT_AS, (mem, mem)),
+                    (resource.RLIMIT_CPU, (cpu, cpu)),
+                    (resource.RLIMIT_FSIZE, (20 * 1024 * 1024, 20 * 1024 * 1024)),
+                ):
+                    try:
+                        resource.setrlimit(res, lim)
+                    except (ValueError, OSError):
+                        # macOS 等平台不支持部分限额（如 RLIMIT_AS 会 EINVAL）。
+                        # 跳过该项：墙钟 timeout 仍是硬保证，生产隔离靠 Docker。
+                        pass
 
             proc = subprocess.run(
                 [sys.executable, "-I", "chart.py"],
