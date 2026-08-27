@@ -54,7 +54,7 @@ def tables_in_sql(sql: str) -> set[str]:
     """提取 SQL 引用的真实表名（排除 CTE 别名，小写）。选表召回率用。"""
     try:
         tree = sqlglot.parse_one(sql, read="sqlite")
-    except sqlglot.errors.ParseError:
+    except sqlglot.errors.SqlglotError:
         return set()
     cte_names = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}
     return {
@@ -67,7 +67,7 @@ def tables_in_sql(sql: str) -> set[str]:
 def gold_order_matters(gold_sql: str) -> bool:
     try:
         tree = sqlglot.parse_one(gold_sql, read="sqlite")
-    except sqlglot.errors.ParseError:
+    except sqlglot.errors.SqlglotError:
         return False
     return tree.args.get("order") is not None if isinstance(tree, exp.Expression) else False
 
@@ -80,7 +80,7 @@ def _order_key_indexes(gold_sql: str, colnames: list[str]) -> list[int] | None:
     """
     try:
         tree = sqlglot.parse_one(gold_sql, read="sqlite")
-    except sqlglot.errors.ParseError:
+    except sqlglot.errors.SqlglotError:
         return None
     order = tree.args.get("order")
     if order is None:

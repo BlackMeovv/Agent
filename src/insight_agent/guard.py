@@ -66,7 +66,9 @@ def validate(
 
     try:
         statements = sqlglot.parse(sql, read=dialect)
-    except sqlglot.errors.ParseError as e:
+    except sqlglot.errors.SqlglotError as e:
+        # SqlglotError 覆盖 ParseError 与 TokenError（未闭合引号等词法级畸形，
+        # BIRD 真实跑批中出现过）——解析不了一律拒绝并交给修复循环，绝不冲出守卫
         return GuardVerdict.reject(sql, "syntax_error", f"SQL 解析失败: {e}")
 
     statements = [s for s in statements if s is not None]

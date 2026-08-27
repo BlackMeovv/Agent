@@ -97,3 +97,17 @@ class TestRejected:
     def test_write_hidden_in_cte(self):
         # sqlite 不支持 CTE 里写操作，但守卫要在解析层就拒绝
         rejected("WITH t AS (DELETE FROM customers) SELECT 1")
+
+
+class TestMalformedSql:
+    """BIRD 真实跑批抓到的崩溃回归：词法级畸形 SQL（未闭合反引号）必须被
+    守卫拒绝并归类为 syntax_error，而不是让 TokenError 冲出守卫砸停评测。"""
+
+    def test_unterminated_backtick_rejected_not_raised(self):
+        verdict = validate("SELECT `Lead FROM atom", {"atom"})
+        assert not verdict.allowed
+        assert verdict.error_kind == "syntax_error"
+
+    def test_unterminated_quote_rejected(self):
+        verdict = validate("SELECT 'abc FROM t", {"t"})
+        assert not verdict.allowed
