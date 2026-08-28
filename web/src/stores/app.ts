@@ -271,10 +271,10 @@ export const useAppStore = defineStore("app", {
 
 export function pillOf(status: MsgStatus) {
   return {
-    running: { t: "正在运行", i: "", c: "var(--acc)", bg: "var(--accbg)" },
-    done: { t: "运行过程", i: "✓", c: "var(--ok)", bg: "var(--okbg)" },
+    running: { t: "正在运行", i: "", c: "var(--accdeep)", bg: "var(--accbg)" },
+    done: { t: "运行过程", i: "✓", c: "var(--acc2deep)", bg: "var(--acc2bg)" },
     blocked: { t: "已拦截", i: "!", c: "var(--err)", bg: "var(--errbg)" },
-    cached: { t: "运行过程", i: "≡", c: "var(--acc)", bg: "var(--accbg)" },
+    cached: { t: "运行过程", i: "≡", c: "var(--accink)", bg: "var(--accbg)" },
     stopped: { t: "已停止", i: "×", c: "var(--warn)", bg: "var(--warnbg)" },
     failed: { t: "未完成", i: "×", c: "var(--err)", bg: "var(--errbg)" },
   }[status];

@@ -44,17 +44,19 @@ const numCols = computed(() =>
 </template>
 
 <style scoped>
-.card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
-.head { display: flex; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); }
-.label { font-size: 12px; color: var(--ink3); }
-.export { margin-left: auto; border: none; background: none; color: var(--acc); font-size: 12px; cursor: pointer; padding: 0; }
+.card { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--paper); }
+.head { display: flex; align-items: center; padding: 8px 16px; background: var(--surface); }
+.label { font-size: 12.5px; font-weight: 600; color: var(--ink2); }
+.export { margin-left: auto; border: none; background: var(--accbg); color: var(--accink); font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 3px 12px; }
+.export:hover { filter: brightness(0.96); }
 .wrap { max-height: 280px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th { position: sticky; top: 0; background: var(--soft); color: var(--ink2); font-weight: 600; text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th.idx { color: var(--ink3); font-weight: 400; text-align: right; width: 40px; }
-td { padding: 6px 12px; border-bottom: 1px solid var(--line); color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: var(--paper); color: var(--ink3); font-weight: 600; font-size: 12px; text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th.idx { font-weight: 400; text-align: right; width: 44px; }
+td { padding: 8px 16px; border-bottom: 1px solid var(--line); color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: none; }
 td.idx { text-align: right; color: var(--ink3); font-size: 12px; }
 th.num, td.num { text-align: right; }
 td i { color: var(--ink3); }
-.more { padding: 5px 12px; font-size: 12px; color: var(--ink3); }
+.more { padding: 6px 16px; font-size: 12px; color: var(--ink3); border-top: 1px solid var(--line); }
 </style>

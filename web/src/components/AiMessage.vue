@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { pillOf, useAppStore, type AiMsg } from "../stores/app";
+import DqLogo from "./DqLogo.vue";
 import ResultTable from "./ResultTable.vue";
 
 const props = defineProps<{ msg: AiMsg }>();
@@ -17,16 +18,20 @@ watch(
 );
 
 const pill = computed(() => pillOf(props.msg.status));
+
+// 运行中胶囊：显示当前步骤名 + 序号（设计稿的「正在生成 SQL · 第 1 步」）
+const runLabel = computed(() => {
+  const last = props.msg.steps[props.msg.steps.length - 1];
+  return last ? `正在${last.label}` : "正在运行";
+});
+const runStep = computed(() => (props.msg.steps.length ? `第 ${props.msg.steps.length} 步` : ""));
+
 const meta = computed(() => {
   const m = props.msg;
-  if (m.status === "running") {
-    const last = m.steps[m.steps.length - 1];
-    return last ? `· ${last.label}…` : "";
-  }
-  if (m.status === "cached") return "· 已跳过（缓存）";
+  if (m.status === "cached") return "已跳过（缓存）";
   const errs = m.steps.filter((s) => s.state === "error").length;
   const dur = m.latencyMs != null ? ` · ${(m.latencyMs / 1000).toFixed(1)}s` : "";
-  return `· ${m.steps.length} 步${dur}${errs ? ` · ${errs} 次失败重试` : ""}`;
+  return `${m.steps.length} 步${dur}${errs ? ` · ${errs} 次失败重试` : ""}`;
 });
 
 function copyAnswer() {
@@ -37,13 +42,19 @@ function copyAnswer() {
 <template>
   <div class="ai">
     <div class="striprow">
-      <div
-        class="strip"
-        :style="{ animation: msg.status === 'running' ? 'pulse 1.6s ease-in-out infinite' : 'none' }"
-        @click="open = !open"
-      >
-        <span v-if="msg.status === 'running'" class="spinner"></span>
-        <span v-else class="dot" :style="{ background: pill.bg, color: pill.c }">{{ pill.i }}</span>
+      <div v-if="msg.status === 'running'" class="strip running" @click="open = !open">
+        <svg class="ring" width="17" height="17" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="7.5" stroke="var(--accbg)" stroke-width="3" />
+          <path d="M10 2.5 A7.5 7.5 0 0 1 17.5 10" stroke="var(--accink)" stroke-width="3" stroke-linecap="round" />
+        </svg>
+        <span class="rtitle">{{ runLabel }}</span>
+        <span v-if="runStep" class="rmeta">{{ runStep }}</span>
+        <span class="dots">
+          <span class="d"></span><span class="d d2"></span><span class="d d3"></span>
+        </span>
+      </div>
+      <div v-else class="strip" :class="{ err: msg.status === 'blocked' }" @click="open = !open">
+        <span class="dot" :style="{ background: pill.bg, color: pill.c }">{{ pill.i }}</span>
         <span :style="{ color: pill.c }" class="stitle">{{ pill.t }}</span>
         <span class="smeta">{{ meta }}</span>
         <span class="schev" :class="{ open }">›</span>
@@ -56,13 +67,16 @@ function copyAnswer() {
         命中结果缓存，直接返回历史结果，本次无运行步骤、零消耗。
       </div>
       <div v-for="(s, i) in msg.steps" :key="i" class="step">
-        <span v-if="s.state === 'run'" class="spinner sspin"></span>
+        <svg v-if="s.state === 'run'" class="stepring" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="7.5" stroke="var(--accbg)" stroke-width="3" />
+          <path d="M10 2.5 A7.5 7.5 0 0 1 17.5 10" stroke="var(--accink)" stroke-width="3" stroke-linecap="round" />
+        </svg>
         <span
           v-else
           class="sdot"
           :style="{
-            background: s.state === 'error' ? 'var(--errbg)' : 'var(--okbg)',
-            color: s.state === 'error' ? 'var(--err)' : 'var(--ok)',
+            background: s.state === 'error' ? 'var(--errbg)' : 'var(--acc2bg)',
+            color: s.state === 'error' ? 'var(--err)' : 'var(--acc2ink)',
           }"
         >{{ s.state === "error" ? "✕" : "✓" }}</span>
         <div class="sbody">
@@ -72,8 +86,20 @@ function copyAnswer() {
         </div>
       </div>
       <div v-if="msg.status === 'running'" class="step">
-        <span class="spinner sspin"></span>
+        <svg class="stepring" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="7.5" stroke="var(--accbg)" stroke-width="3" />
+          <path d="M10 2.5 A7.5 7.5 0 0 1 17.5 10" stroke="var(--accink)" stroke-width="3" stroke-linecap="round" />
+        </svg>
         <div class="sbody"><div class="slabel" style="color: var(--ink3)">等待下一步…</div></div>
+      </div>
+    </div>
+
+    <!-- 生成中的占位：logo 均衡器跳动 + 微光骨架 -->
+    <div v-if="msg.status === 'running' && !msg.answer" class="thinking">
+      <DqLogo :size="38" :animated="true" />
+      <div class="skel">
+        <div class="shimmer" style="width: 82%"></div>
+        <div class="shimmer" style="width: 58%; animation-delay: 0.15s"></div>
       </div>
     </div>
 
@@ -97,33 +123,46 @@ function copyAnswer() {
 </template>
 
 <style scoped>
-.ai { display: flex; flex-direction: column; gap: 12px; }
+.ai { display: flex; flex-direction: column; gap: 13px; }
 .striprow { display: flex; align-items: center; gap: 8px; }
-.strip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px 4px 10px; cursor: pointer; font-size: 12.5px; color: var(--ink2); }
-.strip:hover { border-color: var(--ink3); }
-.spinner { width: 11px; height: 11px; }
-.dot { width: 14px; height: 14px; border-radius: 50%; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.stitle { font-weight: 500; }
+.strip {
+  display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+  background: var(--acc2bg); border-radius: 999px; padding: 5px 15px 5px 9px; font-size: 12.5px;
+}
+.strip:hover { filter: brightness(0.97); }
+.strip.running { background: var(--accbg); }
+.strip.err { background: var(--errbg); }
+.ring { animation: spin 0.9s linear infinite; flex: none; }
+.rtitle { color: var(--accdeep); font-weight: 600; }
+.rmeta { color: var(--accink); opacity: 0.75; }
+.dots { display: inline-flex; gap: 3px; }
+.d { width: 4px; height: 4px; border-radius: 50%; background: var(--accink); animation: dq-dot 1.2s infinite; }
+.d2 { animation-delay: 0.2s; }
+.d3 { animation-delay: 0.4s; }
+.dot { width: 17px; height: 17px; border-radius: 50%; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.stitle { font-weight: 600; }
 .smeta { color: var(--ink3); }
 .schev { color: var(--ink3); font-size: 12px; line-height: 1; transition: transform 0.15s; display: inline-block; }
 .schev.open { transform: rotate(90deg); }
-.cachetag { font-size: 12px; color: var(--acc); background: var(--accbg); border-radius: 999px; padding: 3px 10px; }
-.stepsbox { margin: -2px 0 0 10px; padding: 4px 0 4px 16px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
-.scache { background: var(--accbg); border-radius: 9px; padding: 9px 12px; font-size: 13px; color: var(--acc); }
-.step { display: flex; gap: 9px; animation: fadeUp 0.25s ease; }
-.sspin { width: 13px; height: 13px; margin-top: 3px; }
-.sdot { width: 15px; height: 15px; flex: none; margin-top: 2px; border-radius: 50%; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.cachetag { font-size: 12px; color: var(--accink); background: var(--accbg); border-radius: 999px; padding: 3px 12px; }
+.stepsbox { margin: -2px 0 0 12px; padding: 4px 0 4px 16px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 11px; }
+.scache { background: var(--accbg); border-radius: var(--r-md); padding: 9px 14px; font-size: 13px; color: var(--accink); }
+.step { display: flex; gap: 10px; animation: fadeUp 0.25s ease; }
+.stepring { flex: none; margin-top: 3px; animation: spin 0.9s linear infinite; }
+.sdot { width: 16px; height: 16px; flex: none; margin-top: 2.5px; border-radius: 50%; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .sbody { min-width: 0; }
 .slabel { font-size: 13px; color: var(--ink); }
 .sthought { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
 .serr { font-size: 12.5px; color: var(--err); margin-top: 2px; }
-.blocked { background: var(--errbg); border: 1px solid var(--err); border-radius: 10px; padding: 11px 14px; }
+.thinking { display: flex; align-items: flex-start; gap: 14px; }
+.skel { flex: 1; display: flex; flex-direction: column; gap: 10px; padding-top: 7px; }
+.blocked { background: var(--errbg); border-radius: var(--r-md); padding: 12px 16px; }
 .btitle { font-size: 13.5px; font-weight: 600; color: var(--err); margin-bottom: 2px; }
 .btext { font-size: 13.5px; color: var(--ink2); white-space: pre-wrap; }
-.answer { font-size: 15px; color: var(--ink); white-space: pre-wrap; }
-.chart { max-width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.answer { font-size: 15.5px; line-height: 1.85; color: var(--ink); white-space: pre-wrap; }
+.chart { max-width: 100%; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); }
 .charterr { font-size: 12.5px; color: var(--warn); }
-.foot { display: flex; gap: 14px; font-size: 12px; color: var(--ink3); }
+.foot { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink3); }
 .foot span { cursor: pointer; }
-.foot span:hover { color: var(--ink); }
+.foot span:hover { color: var(--accink); }
 </style>

@@ -55,7 +55,7 @@ function copySql() {
       <div class="pbody">
         <div class="sec" @click="secProg = !secProg">
           <span class="stitle">过程</span>
-          <span class="spill" :style="{ color: pill.c, background: pill.bg }">{{ pill.t }}</span>
+          <span class="spill" :style="{ color: pill.c, background: pill.bg }">{{ msg.status === "done" ? "已完成" : msg.status === "running" ? "运行中" : pill.t }}</span>
           <span class="schev" :class="{ open: secProg }">›</span>
         </div>
         <div v-if="secProg" class="steps">
@@ -68,8 +68,8 @@ function copySql() {
               v-else
               class="dot"
               :style="{
-                background: s.state === 'error' ? 'var(--errbg)' : 'var(--okbg)',
-                color: s.state === 'error' ? 'var(--err)' : 'var(--ok)',
+                background: s.state === 'error' ? 'var(--errbg)' : 'var(--acc2bg)',
+                color: s.state === 'error' ? 'var(--err)' : 'var(--acc2ink)',
               }"
             >{{ s.state === "error" ? "✕" : "✓" }}</span>
             <div class="sbody">
@@ -148,22 +148,22 @@ function copySql() {
 </template>
 
 <style scoped>
-.wrap { width: 330px; flex: none; padding: 14px 14px 14px 0; display: flex; min-height: 0; }
-.panel { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.phead { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.wrap { width: 330px; flex: none; display: flex; min-height: 0; }
+.panel { flex: 1; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--sh-sm); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.phead { flex: none; display: flex; align-items: center; gap: 8px; padding: 17px 22px 8px; }
 .pq { font-size: 12.5px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.pclose { width: 24px; height: 24px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; color: var(--ink3); font-size: 13px; line-height: 1; }
+.pclose { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; color: var(--ink3); font-size: 13px; line-height: 1; }
 .pclose:hover { background: var(--soft); color: var(--ink); }
-.pbody { flex: 1; overflow-y: auto; padding: 2px 18px 16px; }
+.pbody { flex: 1; overflow-y: auto; padding: 2px 22px 16px; }
 .sec { display: flex; align-items: center; gap: 8px; padding: 13px 2px; cursor: pointer; user-select: none; }
 .sec:hover .schev { color: var(--ink); }
 .stitle { font-size: 13.5px; font-weight: 600; }
 .ssub { font-size: 11.5px; color: var(--ink3); }
 .schev { margin-left: auto; font-size: 13px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
 .schev.open { transform: rotate(90deg); }
-.spill { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
-.steps { display: flex; flex-direction: column; gap: 11px; padding-bottom: 14px; }
-.cachebox { background: var(--accbg); border-radius: 9px; padding: 10px 12px; font-size: 13px; color: var(--acc); }
+.spill { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 2px 11px; }
+.steps { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+.cachebox { background: var(--accbg); border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; color: var(--accink); }
 .step { display: flex; gap: 9px; animation: fadeUp 0.25s ease; }
 .step .spinner { margin-top: 4px; }
 .dot { width: 15px; height: 15px; flex: none; margin-top: 3px; border-radius: 50%; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
@@ -172,19 +172,19 @@ function copySql() {
 .sthought { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
 .serr { font-size: 12.5px; color: var(--err); margin-top: 2px; }
 .hr { height: 1px; background: var(--line); }
-.out { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; }
-.sqlcard { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--code); }
-.sqlhead { display: flex; align-items: center; padding: 5px 11px; border-bottom: 1px solid var(--line); }
+.out { display: flex; flex-direction: column; gap: 10px; padding-bottom: 16px; }
+.sqlcard { border-radius: var(--r-md); overflow: hidden; background: var(--code); }
+.sqlhead { display: flex; align-items: center; padding: 7px 14px; border-bottom: 1px solid var(--line); }
 .sqllabel { font-size: 11px; color: var(--ink3); }
-.sqlcopy { margin-left: auto; border: none; background: none; color: var(--acc); font-size: 12px; cursor: pointer; padding: 0; }
-pre { margin: 0; padding: 10px 12px; font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; }
+.sqlcopy { margin-left: auto; border: none; background: none; color: var(--accink); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; }
+pre { margin: 0; padding: 12px 14px; font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; }
 .usage { font-size: 12px; color: var(--ink3); }
-.ctx { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+.ctx { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
 .ctxlabel { font-size: 12px; color: var(--ink3); margin-bottom: 6px; }
 .ctxsub { margin-left: 6px; font-size: 11px; color: var(--ink3); }
 .pillrow { display: flex; flex-wrap: wrap; gap: 6px; }
-.dbpill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 13px; font-size: 12.5px; background: var(--paper); }
-.okdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.dbpill { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 4px 13px; font-size: 12.5px; background: var(--soft); color: var(--ink2); }
+.okdot { width: 6px; height: 6px; border-radius: 50%; background: var(--acc2); }
 .memcol { display: flex; flex-direction: column; gap: 5px; }
-.memchip { font-size: 12.5px; color: var(--ink2); border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; background: var(--paper); }
+.memchip { font-size: 12.5px; color: var(--ink2); border-radius: var(--r-sm); padding: 5px 11px; background: var(--soft); }
 </style>

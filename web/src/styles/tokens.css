@@ -1,50 +1,98 @@
-/* 设计 token：来自设计稿（Insight Agent v2），亮/暗两套 */
+/* 设计 token：Organic 设计系统（奶油底/陶土橙/鼠尾草绿，大圆角），亮/暗两套 */
+
+/* 自托管字体（latin 子集，各 ~20KB）：Google Fonts 在国内不可达，必须打包进产物 */
+@font-face {
+  font-family: "Caprasimo";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/caprasimo-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../assets/fonts/figtree-latin-var.woff2") format("woff2");
+}
+
 body {
   margin: 0;
-  --paper: #f7f6f3; --side: #f1efeb; --card: #fffefc; --soft: #eeece7; --line: #e2dfd8;
-  --ink: #211f1d; --ink2: #605c55; --ink3: #918c83;
-  --acc: #165dff; --accbg: #e9f0ff;
-  --ok: #2f7d4f; --okbg: #e9f3ec;
-  --err: #c8402f; --errbg: #fbeae7;
-  --warn: #b26a00; --warnbg: #fbf1e2;
-  --code: #f3f1ec;
-  --kw: #165dff; --str: #2f7d4f; --num: #b2560d; --pun: #918c83;
+  --paper: #f5ead8; --side: #f5ead8; --card: #f9f4ed; --soft: #eee7db; --surface: #ebddc5;
+  --line: rgba(32, 30, 29, 0.14);
+  --ink: #201e1d; --ink2: #645c50; --ink3: #82796a;
+  --acc: #c67139; --accbg: #ffe1d0; --accink: #8c491a; --accdeep: #402310;
+  --acc2: #7a8a5e; --acc2bg: #e1eecc; --acc2ink: #56633f; --acc2deep: #3d472b;
+  --ok: #56633f; --okbg: #e1eecc;
+  --err: #c8402f; --errbg: #fbe5df;
+  --warn: #b26a00; --warnbg: #fbf1da;
+  --code: #ebddc5;
+  --kw: #8c491a; --str: #56633f; --num: #b2622d; --pun: #a19786;
+  --r-sm: 8px; --r-md: 16px; --r-lg: 28px;
+  --sh-sm: 0 1px 2px rgba(46, 43, 37, 0.14);
+  --sh-md: 0 3px 10px rgba(46, 43, 37, 0.16);
+  --sh-lg: 0 12px 32px rgba(46, 43, 37, 0.22);
 }
 body[data-theme="dark"] {
-  --paper: #1a1917; --side: #161514; --card: #232220; --soft: #2a2825; --line: #35332f;
-  --ink: #eceae4; --ink2: #b3aea5; --ink3: #847f76;
-  --acc: #7aa2ff; --accbg: rgba(122, 162, 255, 0.14);
-  --ok: #5cbd82; --okbg: rgba(92, 189, 130, 0.14);
+  --paper: #201e1d; --side: #201e1d; --card: #2a2725; --soft: #35312d; --surface: #3b3630;
+  --line: rgba(245, 234, 216, 0.13);
+  --ink: #f5ead8; --ink2: #c0b6a5; --ink3: #a19786;
+  --acc: #f6a06b; --accbg: rgba(246, 160, 107, 0.16); --accink: #ffc6a5; --accdeep: #ffe1d0;
+  --acc2: #aebf92; --acc2bg: rgba(174, 191, 146, 0.16); --acc2ink: #ccdbb2; --acc2deep: #e1eecc;
+  --ok: #aebf92; --okbg: rgba(174, 191, 146, 0.16);
   --err: #f07a68; --errbg: rgba(240, 122, 104, 0.14);
   --warn: #e0a24a; --warnbg: rgba(224, 162, 74, 0.14);
-  --code: #1e1d1b;
-  --kw: #7aa2ff; --str: #5cbd82; --num: #e0a24a; --pun: #847f76;
+  --code: #262321;
+  --kw: #f6a06b; --str: #aebf92; --num: #e0a24a; --pun: #82796a;
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sh-md: 0 3px 10px rgba(0, 0, 0, 0.4);
+  --sh-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: -apple-system, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-family: "Figtree", -apple-system, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
   font-size: 15px;
   line-height: 1.65;
 }
-.serif { font-family: "Source Serif 4", Georgia, serif; }
+.serif { font-family: "Caprasimo", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-weight: 400; letter-spacing: -0.015em; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-a { color: var(--acc); text-decoration: none; }
+a { color: var(--accink); text-decoration: none; }
 a:hover { opacity: 0.8; }
 input, button, textarea { font-family: inherit; }
+::selection { background: rgba(198, 113, 57, 0.3); }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes dq-bounce { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
+@keyframes dq-dot { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+@keyframes dq-shimmer { 0% { background-position: -360px 0; } 100% { background-position: 360px 0; } }
+@keyframes dq-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 113, 57, 0.4); }
+  70% { box-shadow: 0 0 0 9px transparent; }
+}
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* 双色旋转圆环（设计稿的运行指示器）：conic 渐变模拟前景弧 */
 .spinner {
-  width: 13px; height: 13px; flex: none;
-  border: 2px solid var(--acc); border-top-color: transparent;
-  border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block;
+  width: 15px; height: 15px; flex: none; border-radius: 50%;
+  border: 2.5px solid var(--accbg);
+  border-top-color: var(--accink);
+  animation: spin 0.9s linear infinite; display: inline-block;
+}
+
+/* 骨架屏微光条 */
+.shimmer {
+  height: 12px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--soft) 25%, var(--surface) 50%, var(--soft) 75%);
+  background-size: 360px 100%;
+  animation: dq-shimmer 1.4s linear infinite;
 }

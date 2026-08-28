@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useAppStore } from "../stores/app";
+import DqLogo from "./DqLogo.vue";
 
 const store = useAppStore();
 const schemaOpen = ref(false);
@@ -43,28 +44,26 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
 <template>
   <aside class="side">
     <div class="brand">
-      <div class="logo">DQ</div>
+      <DqLogo :size="34" />
       <div class="name serif">DeepQuery</div>
     </div>
 
     <div class="pad">
-      <div class="row" @click="store.newChat()">
-        <span class="ic">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-        </span>
+      <button class="newbtn" @click="store.newChat()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round">
+          <path d="M5 12h14M12 5v14" />
+        </svg>
         新建提问
-      </div>
+      </button>
     </div>
 
     <div class="scroll">
       <div class="row" @click="schemaOpen = !schemaOpen">
         <span class="ic">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-            <ellipse cx="8" cy="3.8" rx="5.2" ry="2.2" stroke="currentColor" stroke-width="1.3" />
-            <path d="M2.8 3.8v8.4c0 1.2 2.3 2.2 5.2 2.2s5.2-1 5.2-2.2V3.8" stroke="currentColor" stroke-width="1.3" />
-            <path d="M2.8 8c0 1.2 2.3 2.2 5.2 2.2S13.2 9.2 13.2 8" stroke="currentColor" stroke-width="1.3" />
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+            <path d="M3 12a9 3 0 0 0 18 0" />
           </svg>
         </span>
         库表结构
@@ -94,8 +93,8 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
 
       <div class="row" @click="memOpen = !memOpen">
         <span class="ic">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-            <path d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14 6.5 9.5 2 8l4.5-1.5L8 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linejoin="round">
+            <path d="M12 3l2.2 4.8L19 10l-4.8 2.2L12 17l-2.2-4.8L5 10l4.8-2.2L12 3z" />
           </svg>
         </span>
         记忆
@@ -110,7 +109,6 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
         <button class="madd" @click="addMem">＋ 添加记忆</button>
       </div>
 
-      <div class="divider"></div>
       <div class="histlabel">历史</div>
       <div
         v-for="cv in store.convos"
@@ -152,12 +150,12 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
       <div class="avatar">BM</div>
       <span class="uname">BlackMeovv</span>
       <button class="theme" title="切换主题" @click="store.toggleTheme()">
-        <svg v-if="store.theme === 'light'" width="15" height="15" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="3.1" stroke="currentColor" stroke-width="1.3" />
-          <path d="M8 1.3v1.6M8 13.1v1.6M1.3 8h1.6M13.1 8h1.6M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        <svg v-if="store.theme === 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
         </svg>
-        <svg v-else width="15" height="15" viewBox="0 0 16 16" fill="none">
-          <path d="M13.4 9.6A5.9 5.9 0 1 1 6.4 2.6a4.7 4.7 0 0 0 7 7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linejoin="round">
+          <path d="M20 14.1A8.9 8.9 0 1 1 9.9 4a7 7 0 0 0 10.1 10.1z" />
         </svg>
       </button>
     </div>
@@ -165,52 +163,58 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
 </template>
 
 <style scoped>
-.side { width: 252px; flex: none; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
-.brand { padding: 18px 16px 10px; display: flex; align-items: center; gap: 9px; }
-.logo { width: 22px; height: 22px; border-radius: 6px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
-.name { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
-.pad { padding: 4px 10px 10px; }
-.scroll { flex: 1; overflow-y: auto; padding: 0 10px 12px; }
-.row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--ink); }
-.row:hover { background: var(--soft); }
-.ic { width: 16px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink2); }
+.side { width: 236px; flex: none; display: flex; flex-direction: column; overflow: hidden; padding: 2px 0; }
+.brand { padding: 6px 10px 18px; display: flex; align-items: center; gap: 10px; }
+.name { font-size: 21px; }
+.pad { padding: 0 8px 18px; }
+.newbtn {
+  display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer;
+  border-radius: 999px; padding: 9px 20px; font-size: 14px; font-weight: 600;
+  background: var(--acc); color: var(--paper); box-shadow: var(--sh-sm);
+}
+body[data-theme="dark"] .newbtn { color: #201e1d; }
+.newbtn:hover { filter: brightness(0.94); }
+.newbtn:active { filter: brightness(0.88); }
+.scroll { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 999px; cursor: pointer; font-size: 14px; color: var(--ink); }
+.row:hover { background: var(--card); }
+.ic { width: 16px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--accink); }
 .meta { margin-left: auto; font-size: 12px; color: var(--ink3); }
 .mchev { font-size: 12px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
 .mchev.open { transform: rotate(90deg); }
-.tree { padding: 2px 0 0; }
-.trow { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-.trow:hover { background: var(--soft); }
+.tree { padding: 2px 0 6px; }
+.trow { display: flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 13px; }
+.trow:hover { background: var(--card); }
 .chev { width: 10px; font-size: 11px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
 .chev.open { transform: rotate(90deg); }
 .tname { font-size: 12.5px; }
-.cols { margin: 0 0 4px 24px; padding-left: 10px; border-left: 1px solid var(--line); }
-.crow { display: flex; gap: 8px; padding: 2px 6px; border-radius: 5px; cursor: pointer; font-size: 12px; color: var(--ink2); }
-.crow:hover { background: var(--accbg); color: var(--acc); }
+.cols { margin: 0 0 4px 26px; padding-left: 10px; border-left: 1px solid var(--line); }
+.crow { display: flex; gap: 8px; padding: 2px 8px; border-radius: 999px; cursor: pointer; font-size: 12px; color: var(--ink2); }
+.crow:hover { background: var(--accbg); color: var(--accink); }
 .cty { color: var(--ink3); font-size: 10.5px; }
-.mems { display: flex; flex-direction: column; gap: 5px; padding: 4px 4px 0; }
-.mem { display: flex; align-items: flex-start; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 12px; color: var(--ink2); }
+.mems { display: flex; flex-direction: column; gap: 5px; padding: 4px 4px 6px; }
+.mem { display: flex; align-items: flex-start; gap: 6px; background: var(--card); border-radius: var(--r-md); padding: 7px 12px; font-size: 12px; color: var(--ink2); }
 .mtext { flex: 1; }
 .mdel { cursor: pointer; color: var(--ink3); line-height: 1.2; }
 .mdel:hover { color: var(--err); }
-.madd { align-self: flex-start; border: none; background: none; color: var(--acc); font-size: 12px; cursor: pointer; padding: 2px 4px; }
-.divider { height: 1px; background: var(--line); margin: 14px 6px 8px; }
-.histlabel { padding: 0 10px 4px; font-size: 12px; color: var(--ink3); }
-.hist { position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; color: var(--ink2); }
-.hist:hover { background: var(--soft); }
-.hist.cur { background: var(--soft); color: var(--ink); }
+.madd { align-self: flex-start; border: none; background: none; color: var(--accink); font-size: 12px; cursor: pointer; padding: 2px 6px; font-weight: 600; }
+.histlabel { padding: 22px 12px 6px; font-size: 11px; letter-spacing: 0.1em; color: var(--ink3); }
+.hist { position: relative; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; cursor: pointer; font-size: 13.5px; color: var(--ink2); }
+.hist:hover { background: var(--card); }
+.hist.cur { background: var(--accbg); color: var(--accdeep); font-weight: 600; }
 .htext { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hedit { flex: 1; min-width: 0; border: 1px solid var(--acc); border-radius: 5px; background: var(--card); color: var(--ink); font-size: 13px; padding: 1px 6px; outline: none; }
-.hmore { visibility: hidden; flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--ink3); font-size: 14px; line-height: 1; border-radius: 5px; }
+.hedit { flex: 1; min-width: 0; border: 1px solid var(--acc); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 13px; padding: 1px 10px; outline: none; }
+.hmore { visibility: hidden; flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--ink3); font-size: 14px; line-height: 1; border-radius: 50%; }
 .hist:hover .hmore, .hist.menuon .hmore { visibility: visible; }
-.hmore:hover { background: var(--line); color: var(--ink); }
-.menu { position: absolute; right: 6px; top: 28px; z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); padding: 4px; min-width: 116px; }
-.mitem { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.hmore:hover { background: var(--soft); color: var(--ink); }
+.menu { position: absolute; right: 6px; top: 30px; z-index: 20; background: var(--card); border-radius: var(--r-md); box-shadow: var(--sh-lg); padding: 5px; min-width: 118px; }
+.mitem { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 13px; color: var(--ink); cursor: pointer; }
 .mitem:hover { background: var(--soft); }
 .mitem.danger { color: var(--err); }
 .mitem.danger:hover { background: var(--errbg); }
-.foot { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
-.avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accbg); color: var(--acc); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.foot { padding: 12px 12px 6px; display: flex; align-items: center; gap: 10px; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--acc2bg); color: var(--acc2deep); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
 .uname { font-size: 13px; color: var(--ink2); }
-.theme { margin-left: auto; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px; background: none; color: var(--ink3); cursor: pointer; padding: 0; }
-.theme:hover { background: var(--soft); color: var(--ink); }
+.theme { margin-left: auto; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: none; color: var(--ink3); cursor: pointer; padding: 0; }
+.theme:hover { background: var(--card); color: var(--ink); }
 </style>

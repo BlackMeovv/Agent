@@ -32,9 +32,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 浮动卡片布局：奶油底上并排三块，侧栏透明、主区与详情面板是圆角卡片 */
 .layout {
   height: 100vh;
   display: flex;
+  gap: 16px;
+  padding: 14px;
   background: var(--paper);
   color: var(--ink);
   overflow: hidden;
