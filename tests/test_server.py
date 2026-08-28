@@ -124,6 +124,43 @@ class TestThoughtInStream:
         assert gen.get("thought") == "思路。"
 
 
+class TestAccessCode:
+    """演示部署访问口令：配了 DEMO_ACCESS_CODE 才启用，healthz/schema 始终开放。"""
+
+    @pytest.fixture()
+    def guarded(self, settings, db):
+        cfg = settings.model_copy(update={"demo_access_code": "s3cret"})
+        llm = MockLLM(["思路。\n```sql\nSELECT COUNT(*) FROM customers\n```", "共有客户。"], cycle=True)
+        app = create_app(agent=DeepQuery(cfg, db, llm), settings=cfg)
+        with TestClient(app) as c:
+            yield c
+
+    def test_ask_and_memory_require_code(self, guarded):
+        assert guarded.get("/api/ask", params={"question": "客户数？"}).status_code == 401
+        assert guarded.get("/api/memory").status_code == 401
+        assert guarded.post("/api/memory", json={"note": "x"}).status_code == 401
+        assert guarded.delete("/api/memory/1").status_code == 401
+
+    def test_correct_code_passes(self, guarded):
+        resp = guarded.get("/api/ask", params={"question": "客户数？", "code": "s3cret"})
+        assert resp.status_code == 200
+        assert [d for e, d in sse_events(resp.text) if e == "final"]
+        assert guarded.get("/api/memory", params={"code": "s3cret"}).status_code == 200
+
+    def test_wrong_code_rejected(self, guarded):
+        assert guarded.get("/api/ping", params={"code": "wrong"}).status_code == 401
+        assert guarded.get("/api/ping", params={"code": "s3cret"}).json()["ok"] is True
+
+    def test_open_endpoints_stay_open(self, guarded):
+        body = guarded.get("/healthz").json()
+        assert body["ok"] is True and body["protected"] is True
+        assert guarded.get("/api/schema").status_code == 200
+
+    def test_disabled_by_default(self, client):
+        assert client.get("/healthz").json()["protected"] is False
+        assert client.get("/api/ping").json()["ok"] is True  # 未配置口令=直接放行
+
+
 class TestWebDistServing:
     def test_dist_served_when_present(self, settings, db, tmp_path):
         dist = tmp_path / "dist"

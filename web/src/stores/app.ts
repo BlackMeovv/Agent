@@ -6,6 +6,8 @@ import {
   fetchEnv,
   fetchMemory,
   fetchSchema,
+  ping,
+  setAccessCode,
   type EnvInfo,
   type FinalPayload,
   type MemoryNote,
@@ -102,8 +104,18 @@ export const useAppStore = defineStore("app", {
   actions: {
     async init() {
       document.body.dataset.theme = this.theme;
-      const [env, schema, mems] = await Promise.allSettled([fetchEnv(), fetchSchema(), fetchMemory()]);
-      if (env.status === "fulfilled") this.env = env.value;
+      const env = await fetchEnv().catch(() => null);
+      if (env) this.env = env;
+      // 演示部署开启口令保护时：先验已存口令，不对再询问（最多三次，取消即放弃）
+      if (env?.protected && !(await ping())) {
+        for (let i = 0; i < 3; i++) {
+          const input = window.prompt("本站为演示部署，请输入访问口令");
+          if (input === null) break;
+          setAccessCode(input.trim());
+          if (await ping()) break;
+        }
+      }
+      const [schema, mems] = await Promise.allSettled([fetchSchema(), fetchMemory()]);
       if (schema.status === "fulfilled") this.schema = schema.value;
       if (mems.status === "fulfilled") this.mems = mems.value;
     },

@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import re
 import time
@@ -132,6 +133,24 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
             state["agent"] = build_agent(settings)
         return state["agent"]
 
+    def require_code(code: str | None) -> None:
+        """演示部署的访问口令（.env 配 DEMO_ACCESS_CODE 即启用；不配=关闭）。
+
+        SSE 的 EventSource 无法携带自定义请求头，所以统一走 `code` 查询参数；
+        比较用 compare_digest 防时序侧信道。保护提问与记忆读写；
+        healthz/schema/静态页保持开放。
+        """
+        expected = settings.demo_access_code
+        if not expected:
+            return
+        if not code or not hmac.compare_digest(code, expected):
+            raise HTTPException(status_code=401, detail="访问口令缺失或错误")
+
+    @app.get("/api/ping")
+    def ping(code: str | None = Query(None, max_length=64)):
+        require_code(code)
+        return {"ok": True}
+
     @app.get("/healthz")
     def healthz():
         db_target = settings.db_path
@@ -146,6 +165,7 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
             "mock": settings.llm_mock,
             "db": db_target,
             "model": "mock" if settings.llm_mock else settings.llm_model,
+            "protected": bool(settings.demo_access_code),
         }
 
     @app.get("/metrics")
@@ -168,7 +188,11 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
         return agent_.memory
 
     @app.get("/api/memory")
-    def memory_list(user: str = Query("default", max_length=64)):
+    def memory_list(
+        user: str = Query("default", max_length=64),
+        code: str | None = Query(None, max_length=64),
+    ):
+        require_code(code)
         return {
             "notes": [
                 {"id": i, "note": note, "created_at": ts}
@@ -177,11 +201,17 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
         }
 
     @app.post("/api/memory")
-    def memory_add(item: MemoryNote):
+    def memory_add(item: MemoryNote, code: str | None = Query(None, max_length=64)):
+        require_code(code)
         return {"id": get_memory().remember(item.user, item.note)}
 
     @app.delete("/api/memory/{note_id}")
-    def memory_delete(note_id: int, user: str = Query("default", max_length=64)):
+    def memory_delete(
+        note_id: int,
+        user: str = Query("default", max_length=64),
+        code: str | None = Query(None, max_length=64),
+    ):
+        require_code(code)
         if not get_memory().forget(user, note_id):
             raise HTTPException(status_code=404)
         return {"ok": True}
@@ -200,7 +230,9 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
         question: str = Query(..., min_length=1, max_length=2000),
         chart: bool = Query(False),
         user: str = Query("default", max_length=64),
+        code: str | None = Query(None, max_length=64),
     ):
+        require_code(code)
         agent_ = get_agent()
         key = cache_key(
             f"{user}|{question}",

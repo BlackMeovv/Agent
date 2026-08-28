@@ -1,0 +1,14 @@
+# 镜像构建上下文瘦身：运行时配置走 env_file，数据走 volume，前端在镜像内构建
+.git
+.venv
+.env
+.pytest_cache
+.ruff_cache
+**/__pycache__
+*.pyc
+web/node_modules
+web/dist
+data
+eval/results
+eval/datasets
+docs

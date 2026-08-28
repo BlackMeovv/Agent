@@ -1,4 +1,13 @@
 # deepquery 服务镜像
+# 阶段一：构建 Vue 前端（web/dist 不入库，镜像内自行构建）
+FROM node:20-alpine AS webbuild
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# 阶段二：Python 服务
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
@@ -10,6 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 COPY . .
+COPY --from=webbuild /web/dist ./web/dist
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev && \
     # matplotlib 供容器内 subprocess 图表执行（容器本身即隔离边界）
