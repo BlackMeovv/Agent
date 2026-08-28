@@ -1,13 +1,13 @@
 """BIRD / Spider 基准数据转换器：官方 dev 集 → 本项目 case jsonl。
 
-    python -m insight_agent.evalkit.prepare bird /path/to/bird_dev \
+    python -m deepquery.evalkit.prepare bird /path/to/bird_dev \
         --out eval/cases/bird-dev.jsonl --limit 150 --seed 42
-    python -m insight_agent.evalkit.prepare spider /path/to/spider \
+    python -m deepquery.evalkit.prepare spider /path/to/spider \
         --out eval/cases/spider-dev.jsonl --limit 150
 
 之后跑分（db 路径存的是相对基准根目录的路径，跑分时用 --db-root 指回去）：
 
-    python -m insight_agent.evalkit.runner --cases eval/cases/bird-dev.jsonl \
+    python -m deepquery.evalkit.runner --cases eval/cases/bird-dev.jsonl \
         --db-root /path/to/bird_dev --repeats 3 --label baseline
 
 数据下载见 docs/benchmarks.md。抽样固定 seed，保证子集可复现——
@@ -130,7 +130,7 @@ def prepare(
     out.parent.mkdir(parents=True, exist_ok=True)
     header = (
         f"# {bench} 子集：{len(cases)}/{total} 条（seed={seed}），gold 已逐条执行校验\n"
-        f"# 跑分：python -m insight_agent.evalkit.runner --cases {out} --db-root {root}\n"
+        f"# 跑分：python -m deepquery.evalkit.runner --cases {out} --db-root {root}\n"
     )
     lines = [json.dumps(c, ensure_ascii=False) for c in cases]
     out.write_text(header + "\n".join(lines) + "\n", encoding="utf-8")

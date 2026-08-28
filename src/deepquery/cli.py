@@ -1,8 +1,8 @@
 """命令行入口。
 
-    insight-agent ask "上海的客户一共有多少个？" [--trace] [--no-answer]
-    insight-agent schema        # 查看喂给模型的 schema 上下文
-    insight-agent demo-db       # 生成演示库
+    deepquery ask "上海的客户一共有多少个？" [--trace] [--no-answer]
+    deepquery schema        # 查看喂给模型的 schema 上下文
+    deepquery demo-db       # 生成演示库
 """
 
 from __future__ import annotations
@@ -211,7 +211,7 @@ def _cmd_check_api(_args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="insight-agent", description="企业数据分析 Agent")
+    parser = argparse.ArgumentParser(prog="deepquery", description="企业数据分析 Agent")
     sub = parser.add_subparsers(dest="command", required=True)
 
     ask = sub.add_parser("ask", help="用自然语言提问")

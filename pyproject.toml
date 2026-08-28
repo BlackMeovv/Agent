@@ -1,5 +1,5 @@
 [project]
-name = "insight-agent"
+name = "deepquery"
 version = "0.1.0"
 description = "Enterprise data-analysis agent: NL question -> schema context -> SQL -> guarded execution -> self-repair -> answer, with an execution-accuracy eval harness"
 readme = "README.md"
@@ -42,8 +42,8 @@ postgres = [
 ]
 
 [project.scripts]
-insight-agent = "insight_agent.cli:main"
-insight-agent-mcp = "insight_agent.mcp_server:main"
+deepquery = "deepquery.cli:main"
+deepquery-mcp = "deepquery.mcp_server:main"
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]

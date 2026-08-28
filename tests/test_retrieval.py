@@ -1,4 +1,4 @@
-from insight_agent.retrieval import (
+from deepquery.retrieval import (
     BM25,
     SchemaRetriever,
     TextEntry,

@@ -1,8 +1,8 @@
 import pytest
 
-from insight_agent.config import Settings
-from insight_agent.demo_data import build
-from insight_agent.tools.database import ReadOnlyDatabase
+from deepquery.config import Settings
+from deepquery.demo_data import build
+from deepquery.tools.database import ReadOnlyDatabase
 
 
 @pytest.fixture(scope="session")

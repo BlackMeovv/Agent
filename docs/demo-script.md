@@ -3,7 +3,7 @@
 > 用途：面试官说"给我看看你的项目"时照着走。每一幕都对应一个技术卖点，
 > 边点边说；括号里是台词要点。全程不超过 5 分钟，讲不完的等追问再展开。
 >
-> 演示前检查清单：服务已启动（根目录 `uv run insight-agent serve`）；.env 的 key
+> 演示前检查清单：服务已启动（根目录 `uv run deepquery serve`）；.env 的 key
 > 可用（没网/没 key 时 `LLM_MOCK=1` 兜底，但要提前声明是演示模式）；记忆里只留
 > 1-2 条干净条目；浏览器开好 http://localhost:8000。
 
@@ -77,5 +77,5 @@
 
 ## 没有网络/没有 key 的兜底
 
-`LLM_MOCK=1 uv run insight-agent serve` 起 mock 模式走完 1/2/3/6 幕（提前声明），
+`LLM_MOCK=1 uv run deepquery serve` 起 mock 模式走完 1/2/3/6 幕（提前声明），
 第 7 幕评测结果是提前跑好的文件，不依赖现场网络。最坏情况：README 里的 GIF + 截图。

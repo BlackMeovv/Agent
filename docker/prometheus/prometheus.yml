@@ -2,6 +2,6 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
-  - job_name: insight-agent
+  - job_name: deepquery
     static_configs:
       - targets: ["app:8000"]

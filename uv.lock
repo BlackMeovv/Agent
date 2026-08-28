@@ -398,6 +398,66 @@ wheels = [
 ]
 
 [[package]]
+name = "deepquery"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastapi" },
+    { name = "langgraph" },
+    { name = "openai" },
+    { name = "prometheus-client" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
+    { name = "rich" },
+    { name = "sqlglot" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+cache = [
+    { name = "redis" },
+]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-timeout" },
+]
+mcp = [
+    { name = "mcp" },
+]
+mysql = [
+    { name = "pymysql" },
+]
+postgres = [
+    { name = "psycopg", extra = ["binary"] },
+]
+trace = [
+    { name = "langfuse" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "langfuse", marker = "extra == 'trace'", specifier = ">=3.0" },
+    { name = "langgraph", specifier = ">=0.2,<0.4" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.2" },
+    { name = "openai", specifier = ">=1.40" },
+    { name = "prometheus-client", specifier = ">=0.26.0" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.3" },
+    { name = "pymysql", marker = "extra == 'mysql'", specifier = ">=1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.3" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "redis", marker = "extra == 'cache'", specifier = ">=5" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "sqlglot", specifier = ">=25.0" },
+    { name = "uvicorn", specifier = ">=0.52.4" },
+]
+provides-extras = ["dev", "trace", "mcp", "cache", "mysql", "postgres"]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -527,66 +587,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
 ]
-
-[[package]]
-name = "insight-agent"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastapi" },
-    { name = "langgraph" },
-    { name = "openai" },
-    { name = "prometheus-client" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-dotenv" },
-    { name = "rich" },
-    { name = "sqlglot" },
-    { name = "uvicorn" },
-]
-
-[package.optional-dependencies]
-cache = [
-    { name = "redis" },
-]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-timeout" },
-]
-mcp = [
-    { name = "mcp" },
-]
-mysql = [
-    { name = "pymysql" },
-]
-postgres = [
-    { name = "psycopg", extra = ["binary"] },
-]
-trace = [
-    { name = "langfuse" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.141.1" },
-    { name = "langfuse", marker = "extra == 'trace'", specifier = ">=3.0" },
-    { name = "langgraph", specifier = ">=0.2,<0.4" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.2" },
-    { name = "openai", specifier = ">=1.40" },
-    { name = "prometheus-client", specifier = ">=0.26.0" },
-    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1" },
-    { name = "pydantic", specifier = ">=2.7" },
-    { name = "pydantic-settings", specifier = ">=2.3" },
-    { name = "pymysql", marker = "extra == 'mysql'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.3" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "redis", marker = "extra == 'cache'", specifier = ">=5" },
-    { name = "rich", specifier = ">=13.7" },
-    { name = "sqlglot", specifier = ">=25.0" },
-    { name = "uvicorn", specifier = ">=0.52.4" },
-]
-provides-extras = ["dev", "trace", "mcp", "cache", "mysql", "postgres"]
 
 [[package]]
 name = "jiter"

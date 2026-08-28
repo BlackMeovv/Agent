@@ -17,6 +17,6 @@ jobs:
       - name: Unit tests (offline)
         run: uv run pytest
       - name: Build demo database
-        run: uv run python -m insight_agent.demo_data
+        run: uv run python -m deepquery.demo_data
       - name: Eval harness self-check (gold replay must be 100%)
-        run: uv run python -m insight_agent.evalkit.runner --cases eval/cases/smoke.jsonl --gold-replay
+        run: uv run python -m deepquery.evalkit.runner --cases eval/cases/smoke.jsonl --gold-replay

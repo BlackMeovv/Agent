@@ -1,12 +1,12 @@
 """Week 3 图接线测试：Schema RAG、按错误类型的修复提示、防幻觉拦截。"""
 
-from insight_agent.agent import InsightAgent
-from insight_agent.llm import MockLLM
+from deepquery.agent import DeepQuery
+from deepquery.llm import MockLLM
 
 
 def make_agent(settings, db, replies):
     llm = MockLLM(replies)
-    return InsightAgent(settings, db, llm), llm
+    return DeepQuery(settings, db, llm), llm
 
 
 def sql_reply(sql):
@@ -121,7 +121,7 @@ class TestRunnerTableRecall:
     def test_recall_metric(self, settings, db, demo_db_path, tmp_path, monkeypatch):
         import json
 
-        from insight_agent.evalkit.runner import run_eval
+        from deepquery.evalkit.runner import run_eval
 
         cases = tmp_path / "cases.jsonl"
         cases.write_text(
@@ -139,7 +139,7 @@ class TestRunnerTableRecall:
         monkeypatch.setenv("SCHEMA_RAG", "on")
         monkeypatch.setenv("SCHEMA_RAG_TOP_K", "2")
         monkeypatch.setenv("DB_PATH", str(demo_db_path))
-        from insight_agent.config import get_settings
+        from deepquery.config import get_settings
 
         get_settings.cache_clear()
         try:

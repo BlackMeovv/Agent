@@ -2,14 +2,14 @@
 
 import sqlite3
 
-from insight_agent.agent import InsightAgent
-from insight_agent.agent.graph import extract_sql
-from insight_agent.evalkit.scorer import execution_match
-from insight_agent.llm import MockLLM
+from deepquery.agent import DeepQuery
+from deepquery.agent.graph import extract_sql
+from deepquery.evalkit.scorer import execution_match
+from deepquery.llm import MockLLM
 
 
 def make_agent(settings, db, replies):
-    return InsightAgent(settings, db, MockLLM(replies))
+    return DeepQuery(settings, db, MockLLM(replies))
 
 
 def sql_reply(sql: str) -> str:
@@ -141,8 +141,8 @@ class TestRunnerAbortOnApiOutage:
     def test_consecutive_llm_failures_abort(self, demo_db_path, tmp_path, monkeypatch):
         import json
 
-        from insight_agent.evalkit import runner as runner_mod
-        from insight_agent.llm import BaseLLM, LLMError
+        from deepquery.evalkit import runner as runner_mod
+        from deepquery.llm import BaseLLM, LLMError
 
         class DeadLLM(BaseLLM):
             model_name = "dead"
@@ -152,7 +152,7 @@ class TestRunnerAbortOnApiOutage:
 
         monkeypatch.setattr(runner_mod, "LLMClient", lambda _settings: DeadLLM())
         monkeypatch.setenv("DB_PATH", str(demo_db_path))
-        from insight_agent.config import get_settings
+        from deepquery.config import get_settings
 
         get_settings.cache_clear()
         cases_file = tmp_path / "cases.jsonl"

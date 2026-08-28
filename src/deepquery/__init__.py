@@ -1,16 +1,16 @@
-"""insight-agent：企业数据分析 Agent。
+"""deepquery：企业数据分析 Agent。
 
 最小用法：
-    from insight_agent import build_agent
+    from deepquery import build_agent
     agent = build_agent()
     outcome = agent.ask("上海的客户一共有多少个？")
 """
 
-from .agent import InsightAgent, RunOutcome
+from .agent import DeepQuery, RunOutcome
 from .config import Settings, get_settings
 
 
-def build_agent(settings: Settings | None = None) -> InsightAgent:
+def build_agent(settings: Settings | None = None) -> DeepQuery:
     """按 .env 配置组装 agent 实例（含可选的 Langfuse 追踪）。
 
     LLM_MOCK=1 时使用循环 MockLLM（演示/压测服务链路用，不调真实模型）——
@@ -37,7 +37,7 @@ def build_agent(settings: Settings | None = None) -> InsightAgent:
         )
     else:
         llm = LLMClient(settings)
-    return InsightAgent(
+    return DeepQuery(
         settings,
         db,
         llm,
@@ -46,4 +46,4 @@ def build_agent(settings: Settings | None = None) -> InsightAgent:
     )
 
 
-__all__ = ["InsightAgent", "RunOutcome", "Settings", "get_settings", "build_agent"]
+__all__ = ["DeepQuery", "RunOutcome", "Settings", "get_settings", "build_agent"]

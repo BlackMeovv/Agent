@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from insight_agent.tools.database import ReadOnlyDatabase
+from deepquery.tools.database import ReadOnlyDatabase
 
 
 class TestReadOnly:

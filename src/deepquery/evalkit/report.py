@@ -1,8 +1,8 @@
 """消融对比报告：把多个带 label 的评测结果汇成一张表。
 
-    python -m insight_agent.evalkit.report eval/results/a.json eval/results/b.json \
+    python -m deepquery.evalkit.report eval/results/a.json eval/results/b.json \
         --out eval/results/report.md
-    python -m insight_agent.evalkit.report a.json b.json --mcnemar   # 对前两个做配对检验
+    python -m deepquery.evalkit.report a.json b.json --mcnemar   # 对前两个做配对检验
 
 这张表就是简历上"消融实验"的原始材料：每行一个配置，
 EX 带 95% 置信区间，成本与延迟并列——优化是否值得一目了然。

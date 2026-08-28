@@ -1,4 +1,4 @@
-# insight-agent 服务镜像
+# deepquery 服务镜像
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
@@ -17,4 +17,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 EXPOSE 8000
 # 启动前确保演示库存在
-CMD ["sh", "-c", "test -f \"${DB_PATH:-data/demo/ecommerce.sqlite}\" || uv run python -m insight_agent.demo_data; uv run insight-agent serve"]
+CMD ["sh", "-c", "test -f \"${DB_PATH:-data/demo/ecommerce.sqlite}\" || uv run python -m deepquery.demo_data; uv run deepquery serve"]

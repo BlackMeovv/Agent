@@ -41,7 +41,7 @@ make bird ROOT=~/data/bird_dev LABEL=schema-rag
 ```bash
 make report FILES="eval/results/bird-dev-baseline-*.json eval/results/bird-dev-schema-rag-*.json"
 # 或加配对显著性检验：
-uv run python -m insight_agent.evalkit.report <baseline.json> <optimized.json> --mcnemar
+uv run python -m deepquery.evalkit.report <baseline.json> <optimized.json> --mcnemar
 ```
 
 输出 markdown 表：每行一个配置，EX 带置信区间 + 成本 + 延迟。

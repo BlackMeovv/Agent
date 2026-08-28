@@ -1,5 +1,5 @@
-from insight_agent.tools.contract import QueryResult
-from insight_agent.verify import check_answer, extract_numbers
+from deepquery.tools.contract import QueryResult
+from deepquery.verify import check_answer, extract_numbers
 
 
 def result_with(rows, columns=None):

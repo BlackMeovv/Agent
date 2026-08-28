@@ -1,6 +1,6 @@
 {
-  "uid": "insight-agent",
-  "title": "insight-agent",
+  "uid": "deepquery",
+  "title": "deepquery",
   "schemaVersion": 39,
   "refresh": "10s",
   "time": { "from": "now-1h", "to": "now" },
@@ -12,7 +12,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "expr": "sum by (status) (rate(insight_requests_total[1m]))", "legendFormat": "{{status}}" }
+        { "expr": "sum by (status) (rate(deepquery_requests_total[1m]))", "legendFormat": "{{status}}" }
       ]
     },
     {
@@ -22,8 +22,8 @@
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "expr": "histogram_quantile(0.5, sum(rate(insight_request_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, sum(rate(insight_request_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
+        { "expr": "histogram_quantile(0.5, sum(rate(deepquery_request_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(deepquery_request_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
       ],
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
@@ -33,7 +33,7 @@
       "title": "Token 消耗速率",
       "gridPos": { "x": 0, "y": 8, "w": 8, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "rate(insight_llm_tokens_total[5m])", "legendFormat": "tokens/s" }]
+      "targets": [{ "expr": "rate(deepquery_llm_tokens_total[5m])", "legendFormat": "tokens/s" }]
     },
     {
       "id": 4,
@@ -41,7 +41,7 @@
       "title": "累计成本",
       "gridPos": { "x": 8, "y": 8, "w": 4, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "insight_llm_cost_total" }]
+      "targets": [{ "expr": "deepquery_llm_cost_total" }]
     },
     {
       "id": 5,
@@ -49,7 +49,7 @@
       "title": "缓存命中",
       "gridPos": { "x": 12, "y": 8, "w": 4, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "insight_cache_hits_total" }]
+      "targets": [{ "expr": "deepquery_cache_hits_total" }]
     },
     {
       "id": 6,
@@ -57,7 +57,7 @@
       "title": "防幻觉拦截",
       "gridPos": { "x": 16, "y": 8, "w": 4, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "insight_hallucination_blocked_total" }]
+      "targets": [{ "expr": "deepquery_hallucination_blocked_total" }]
     }
   ]
 }

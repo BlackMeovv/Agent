@@ -1,6 +1,6 @@
 import pytest
 
-from insight_agent.evalkit.stats import mcnemar_exact, wilson_interval
+from deepquery.evalkit.stats import mcnemar_exact, wilson_interval
 
 
 class TestWilson:

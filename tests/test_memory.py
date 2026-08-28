@@ -1,6 +1,6 @@
-from insight_agent.agent import InsightAgent
-from insight_agent.llm import MockLLM
-from insight_agent.memory import MemoryStore
+from deepquery.agent import DeepQuery
+from deepquery.llm import MockLLM
+from deepquery.memory import MemoryStore
 
 
 class TestMemoryStore:
@@ -49,7 +49,7 @@ class TestMemoryInjection:
         store = MemoryStore(tmp_path / "mem.sqlite")
         store.remember("u1", "我说的客户默认指钻石会员（vip_level=3）")
         llm = MockLLM(["思路。\n```sql\nSELECT COUNT(*) FROM customers WHERE vip_level = 3\n```"])
-        agent = InsightAgent(settings, db, llm, memory=store)
+        agent = DeepQuery(settings, db, llm, memory=store)
         agent.ask("客户有多少个？", generate_answer=False, user_id="u1")
         prompt = llm.calls[0][1]["content"]
         assert "口径偏好" in prompt and "钻石会员" in prompt
@@ -58,6 +58,6 @@ class TestMemoryInjection:
         store = MemoryStore(tmp_path / "mem.sqlite")
         store.remember("u1", "u1 的私有口径")
         llm = MockLLM(["思路。\n```sql\nSELECT COUNT(*) FROM customers\n```"])
-        agent = InsightAgent(settings, db, llm, memory=store)
+        agent = DeepQuery(settings, db, llm, memory=store)
         agent.ask("客户有多少个？", generate_answer=False, user_id="u2")
         assert "u1 的私有口径" not in llm.calls[0][1]["content"]

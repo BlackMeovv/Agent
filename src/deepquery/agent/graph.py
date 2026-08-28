@@ -141,7 +141,7 @@ _CHART_CODE_DENY = re.compile(
 )
 
 
-class InsightAgent:
+class DeepQuery:
     def __init__(
         self,
         settings: Settings,

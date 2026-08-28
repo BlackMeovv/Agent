@@ -1,7 +1,7 @@
 """自建业务评测集生成器测试。"""
 
-from insight_agent.evalkit.business_set import generate
-from insight_agent.evalkit.runner import load_cases, run_eval
+from deepquery.evalkit.business_set import generate
+from deepquery.evalkit.runner import load_cases, run_eval
 
 
 class TestBusinessSet:
@@ -24,7 +24,7 @@ class TestBusinessSet:
     def test_gold_replay_on_subset(self, demo_db_path, tmp_path, monkeypatch):
         info = generate(demo_db_path, out_dir=tmp_path)
         monkeypatch.setenv("DB_PATH", str(demo_db_path))
-        from insight_agent.config import get_settings
+        from deepquery.config import get_settings
 
         get_settings.cache_clear()
         try:

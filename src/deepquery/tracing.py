@@ -113,11 +113,11 @@ def build_tracer(settings: "Settings") -> Tracer:
         return LangfuseTracer(settings)
     except ImportError:
         print(
-            "[insight-agent] 检测到 LANGFUSE_* 配置但未安装 langfuse 包，"
+            "[deepquery] 检测到 LANGFUSE_* 配置但未安装 langfuse 包，"
             "追踪已禁用。启用：uv sync --extra trace",
             file=sys.stderr,
         )
         return NOOP_TRACER
     except Exception as e:
-        print(f"[insight-agent] Langfuse 初始化失败，追踪已禁用: {e}", file=sys.stderr)
+        print(f"[deepquery] Langfuse 初始化失败，追踪已禁用: {e}", file=sys.stderr)
         return NOOP_TRACER

@@ -24,7 +24,7 @@ server: { proxy: { "/api": "http://localhost:8000", "/charts": "http://localhost
 echo "CORS_ALLOW_ORIGINS=http://localhost:5173" >> .env
 ```
 
-联调时后端起 mock 模式即可（不花钱、毫秒级响应）：`LLM_MOCK=1 uv run insight-agent serve`
+联调时后端起 mock 模式即可（不花钱、毫秒级响应）：`LLM_MOCK=1 uv run deepquery serve`
 
 ## 三、页面结构与控件清单（按区域）
 

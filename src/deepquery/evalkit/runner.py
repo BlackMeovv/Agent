@@ -1,8 +1,8 @@
 """评测运行器。
 
-    python -m insight_agent.evalkit.runner --cases eval/cases/smoke.jsonl                  # 真实 LLM
-    python -m insight_agent.evalkit.runner --cases eval/cases/smoke.jsonl --gold-replay    # 离线自检
-    python -m insight_agent.evalkit.runner --cases eval/cases/bird-dev.jsonl \
+    python -m deepquery.evalkit.runner --cases eval/cases/smoke.jsonl                  # 真实 LLM
+    python -m deepquery.evalkit.runner --cases eval/cases/smoke.jsonl --gold-replay    # 离线自检
+    python -m deepquery.evalkit.runner --cases eval/cases/bird-dev.jsonl \
         --repeats 3 --label "baseline"                                                     # 正式跑分
 
 设计要点：
@@ -24,7 +24,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from ..agent import InsightAgent
+from ..agent import DeepQuery
 from ..config import get_settings
 from ..llm import LLMClient, MockLLM
 from ..tools.database import ReadOnlyDatabase
@@ -76,7 +76,7 @@ def run_eval(
         return Path(settings.db_path)
 
     dbs: dict[str, ReadOnlyDatabase] = {}
-    agents: dict[str, InsightAgent] = {}
+    agents: dict[str, DeepQuery] = {}
     real_llm = None if gold_replay else LLMClient(settings)
 
     def get_db(path: Path) -> ReadOnlyDatabase:
@@ -110,11 +110,11 @@ def run_eval(
             db = get_db(db_path)
             if gold_replay:
                 llm = MockLLM([f"直接回放 gold SQL。\n```sql\n{case['gold_sql']}\n```"])
-                agent = InsightAgent(settings, db, llm)
+                agent = DeepQuery(settings, db, llm)
             else:
                 key = str(db_path)
                 if key not in agents:
-                    agents[key] = InsightAgent(settings, db, real_llm)
+                    agents[key] = DeepQuery(settings, db, real_llm)
                 agent = agents[key]
 
             outcome = agent.ask(case["question"], generate_answer=False)
@@ -255,7 +255,7 @@ def run_eval(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="insight-agent 评测运行器")
+    parser = argparse.ArgumentParser(description="deepquery 评测运行器")
     parser.add_argument("--cases", default="eval/cases/smoke.jsonl")
     parser.add_argument("--gold-replay", action="store_true", help="离线回放 gold SQL 自检评测基建")
     parser.add_argument("--repeats", type=int, default=1, help="重复次数（汇总为 Wilson 置信区间）")

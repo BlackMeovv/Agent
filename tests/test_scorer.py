@@ -1,6 +1,6 @@
 import pytest
 
-from insight_agent.evalkit.scorer import execution_match, gold_order_matters
+from deepquery.evalkit.scorer import execution_match, gold_order_matters
 
 
 class TestOrderSensitivity:
@@ -86,7 +86,7 @@ class TestTieTolerance:
         assert execution_match(demo_db_path, self.PRED_TIEBREAK, gold).match
 
     def test_unresolvable_order_expr_stays_strict(self):
-        from insight_agent.evalkit.scorer import _order_key_indexes
+        from deepquery.evalkit.scorer import _order_key_indexes
 
         assert _order_key_indexes(
             "SELECT name FROM products ORDER BY length(name)", ["name"]

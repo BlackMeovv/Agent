@@ -2,10 +2,10 @@
 
 import pytest
 
-from insight_agent import mcp_server
-from insight_agent.agent import InsightAgent
-from insight_agent.llm import MockLLM
-from insight_agent.memory import MemoryStore
+from deepquery import mcp_server
+from deepquery.agent import DeepQuery
+from deepquery.llm import MockLLM
+from deepquery.memory import MemoryStore
 
 pytest.importorskip("mcp", reason="需要可选依赖：uv sync --extra mcp")
 
@@ -20,7 +20,7 @@ def inject_agent(settings, db, tmp_path):
         ],
         cycle=True,
     )
-    agent = InsightAgent(settings, db, llm, memory=MemoryStore(tmp_path / "mem.sqlite"))
+    agent = DeepQuery(settings, db, llm, memory=MemoryStore(tmp_path / "mem.sqlite"))
     mcp_server.set_agent(agent)
     yield
     mcp_server.set_agent(None)

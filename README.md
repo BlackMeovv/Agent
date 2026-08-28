@@ -1,7 +1,7 @@
-# insight-agent
+# deepquery
 
 **给业务人员的临时取数助手**：企业里大量长尾问题（"上周华东退货率怎么高了？"）不在任何
-仪表盘上，现状是提数工单排队等分析师写 SQL。insight-agent 让不会 SQL 的人一句话拿到数——
+仪表盘上，现状是提数工单排队等分析师写 SQL。deepquery 让不会 SQL 的人一句话拿到数——
 自动完成 **选表 → 生成 SQL → 安全执行 → 出错自纠 → 给出结论**，每个回答可追溯到 SQL 与
 原始结果；自带执行准确率（EX）评测闭环、预算熔断与成本记账。演示库为电商场景（客户/订单/
 商品/支付），架构与库解耦，可接任意 SQLite/MySQL/PostgreSQL（只读账号）。
@@ -63,9 +63,9 @@ agent 与具体数据库**完全解耦**：schema 是连接时运行时自省的
 没有任何针对演示库的硬编码。支持三种引擎，换库只需改一个连接目标：
 
 ```bash
-insight-agent ask "问题" --db /path/to/your.sqlite                        # SQLite 文件
-insight-agent ask "问题" --db mysql://readonly:pwd@host:3306/yourdb       # MySQL（uv sync --extra mysql）
-insight-agent ask "问题" --db postgres://readonly:pwd@host:5432/yourdb    # PostgreSQL（--extra postgres）
+deepquery ask "问题" --db /path/to/your.sqlite                        # SQLite 文件
+deepquery ask "问题" --db mysql://readonly:pwd@host:3306/yourdb       # MySQL（uv sync --extra mysql）
+deepquery ask "问题" --db postgres://readonly:pwd@host:5432/yourdb    # PostgreSQL（--extra postgres）
 # 或在 .env 里改 DB_PATH，服务/CLI 全部跟随
 ```
 
@@ -75,7 +75,7 @@ MySQL `SET SESSION TRANSACTION READ ONLY` / PG `default_transaction_read_only`�
 
 ```bash
 make db-dumps && docker compose -f docker-compose.dbs.yml up -d   # 一键起带演示数据的 MySQL+PG
-insight-agent ask "上海的客户一共有多少个？" --db mysql://readonly:readonly@localhost:3306/insight
+deepquery ask "上海的客户一共有多少个？" --db mysql://readonly:readonly@localhost:3306/deepquery
 ```
 
 内置电商演示库只是让仓库开箱即跑的样例数据；跑 BIRD 基准时 agent 会在
@@ -96,11 +96,11 @@ npm run build    # 构建后，后端检测到 web/dist 会自动作为主页托
 
 ```bash
 # MCP server：接入 Claude Desktop / Claude Code 等任意 MCP 客户端
-uv sync --extra mcp && uv run insight-agent-mcp
+uv sync --extra mcp && uv run deepquery-mcp
 
 # 跨会话记忆：记住你的口径偏好（按用户隔离）
-insight-agent remember "我说的销售额一律指已完成订单的成交金额"
-insight-agent ask "这个月销售额多少？" --chart    # --chart 生成沙箱图表
+deepquery remember "我说的销售额一律指已完成订单的成交金额"
+deepquery ask "这个月销售额多少？" --chart    # --chart 生成沙箱图表
 
 # 压测（服务端先用 LLM_MOCK=1 起，测工程链路吞吐，不花模型钱）
 locust -f eval/load/locustfile.py --host http://localhost:8000

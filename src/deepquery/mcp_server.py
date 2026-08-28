@@ -1,11 +1,11 @@
-"""MCP server：把 insight-agent 暴露给任何 MCP 客户端（Claude Desktop / Claude Code 等）。
+"""MCP server：把 deepquery 暴露给任何 MCP 客户端（Claude Desktop / Claude Code 等）。
 
     uv sync --extra mcp
-    uv run insight-agent-mcp        # stdio transport
+    uv run deepquery-mcp        # stdio transport
 
 Claude Desktop 配置示例（claude_desktop_config.json）：
-    {"mcpServers": {"insight-agent": {
-        "command": "uv", "args": ["run", "--directory", "/path/to/Agent", "insight-agent-mcp"]}}}
+    {"mcpServers": {"deepquery": {
+        "command": "uv", "args": ["run", "--directory", "/path/to/Agent", "deepquery-mcp"]}}}
 
 工具设计原则与主链路一致：run_sql 也必须过守卫（只读、白名单、行数限额）——
 MCP 客户端同样是不受信输入源。
@@ -98,7 +98,7 @@ def create_mcp_server():
     except ImportError as e:
         raise SystemExit("未安装 MCP SDK。运行：uv sync --extra mcp") from e
 
-    server = ServerClass("insight-agent")
+    server = ServerClass("deepquery")
     server.tool()(ask_data)
     server.tool()(run_sql)
     server.tool()(get_schema)

@@ -2,11 +2,11 @@
 
 import pytest
 
-from insight_agent.agent import InsightAgent
-from insight_agent.guard import validate
-from insight_agent.llm import MockLLM
-from insight_agent.tools.database import ReadOnlyDatabase
-from insight_agent.tools.engines import (
+from deepquery.agent import DeepQuery
+from deepquery.guard import validate
+from deepquery.llm import MockLLM
+from deepquery.tools.database import ReadOnlyDatabase
+from deepquery.tools.engines import (
     MySQLDatabase,
     PostgresDatabase,
     is_server_dsn,
@@ -58,7 +58,7 @@ class FakeConn:
 
 def mysql_db(behavior, **kw):
     conn = FakeConn(behavior)
-    db = MySQLDatabase("mysql://readonly:pwd@localhost:3306/insight", connect_fn=lambda: conn, **kw)
+    db = MySQLDatabase("mysql://readonly:pwd@localhost:3306/deepquery", connect_fn=lambda: conn, **kw)
     return db, conn
 
 
@@ -105,7 +105,7 @@ class TestMySQLBehavior:
         "message,kind",
         [
             ("(3024, 'Query execution was interrupted, maximum statement execution time exceeded')", "timeout"),
-            ("(1146, \"Table 'insight.ghosts' doesn't exist\")", "no_such_table"),
+            ("(1146, \"Table 'deepquery.ghosts' doesn't exist\")", "no_such_table"),
             ("(1054, \"Unknown column 'nope' in 'field list'\")", "no_such_column"),
             ("(1064, 'You have an error in your SQL syntax')", "syntax_error"),
             ("(1792, 'Cannot execute statement in a READ ONLY transaction.')", "guard_rejected"),
@@ -159,12 +159,12 @@ class TestDialectThreading:
                 return {"customers": "CREATE TABLE customers (id INT, name VARCHAR(64), city VARCHAR(32)) COMMENT='客户表';"}
 
             def run_query(self, sql):
-                from insight_agent.tools.contract import QueryResult
+                from deepquery.tools.contract import QueryResult
 
                 return QueryResult(ok=True, columns=["cnt"], rows=[(5,)], row_count=1)
 
         llm = MockLLM(["思路。\n```sql\nSELECT COUNT(*) FROM customers\n```"])
-        agent = InsightAgent(settings, FakeMySQLLike(), llm)
+        agent = DeepQuery(settings, FakeMySQLLike(), llm)
         outcome = agent.ask("客户数？", generate_answer=False)
         assert outcome.status == "ok"
         assert "MySQL" in llm.calls[0][0]["content"]  # system prompt 按方言渲染
@@ -173,7 +173,7 @@ class TestDialectThreading:
 
 class TestDumps:
     def test_mysql_dump(self):
-        from insight_agent.demo_data import dump_sql
+        from deepquery.demo_data import dump_sql
 
         dump = dump_sql("mysql")
         assert "CREATE TABLE customers" in dump and "COMMENT" in dump
@@ -181,14 +181,14 @@ class TestDumps:
         assert "用户0001" in dump
 
     def test_postgres_dump(self):
-        from insight_agent.demo_data import dump_sql
+        from deepquery.demo_data import dump_sql
 
         dump = dump_sql("postgres")
         assert "COMMENT ON TABLE customers" in dump
         assert "INSERT INTO payments" in dump
 
     def test_unknown_dialect(self):
-        from insight_agent.demo_data import dump_sql
+        from deepquery.demo_data import dump_sql
 
         with pytest.raises(ValueError):
             dump_sql("oracle")

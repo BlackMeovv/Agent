@@ -1,6 +1,6 @@
 """自建业务评测集生成器：基于演示库的参数化模板，生成 200+ 条"业务黑话"问题。
 
-    python -m insight_agent.evalkit.business_set     # 或 make business-set
+    python -m deepquery.evalkit.business_set     # 或 make business-set
 
 设计：
 - 模板 × 参数组合展开，每条 gold 生成时逐条执行校验，空结果/报错直接剔除；

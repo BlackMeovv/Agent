@@ -6,7 +6,7 @@
 2. 真实端到端：正常启动（真实 LLM），并发压低一点（-u 5），看真实 P95 与成本。
 
 报告数字口径：locust 网页 (http://localhost:8089) 的 RPS 与 P95，
-配合 Grafana 大盘的 insight_request_seconds 交叉验证。
+配合 Grafana 大盘的 deepquery_request_seconds 交叉验证。
 """
 
 import random

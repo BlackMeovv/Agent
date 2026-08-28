@@ -1,6 +1,6 @@
 """FastAPI 服务：SSE 流式接口 + 单文件演示页 + Prometheus 指标 + 结果缓存。
 
-    insight-agent serve            # 或 uvicorn "insight_agent.server:create_app" --factory
+    deepquery serve            # 或 uvicorn "deepquery.server:create_app" --factory
 
 接口：
     GET  /                     演示网页（无前端框架，单文件）
@@ -22,22 +22,22 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Str
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
 
-from .agent import InsightAgent, RunOutcome
+from .agent import DeepQuery, RunOutcome
 from .cache import BaseCache, build_cache, cache_key
 from .config import Settings, get_settings
 
 # ---------- Prometheus 指标 ----------
 
-REQUESTS = Counter("insight_requests_total", "请求总数（按结果状态）", ["status"])
-CACHE_HITS = Counter("insight_cache_hits_total", "结果缓存命中数")
-HALLUCINATION_BLOCKED = Counter("insight_hallucination_blocked_total", "防幻觉拦截次数")
+REQUESTS = Counter("deepquery_requests_total", "请求总数（按结果状态）", ["status"])
+CACHE_HITS = Counter("deepquery_cache_hits_total", "结果缓存命中数")
+HALLUCINATION_BLOCKED = Counter("deepquery_hallucination_blocked_total", "防幻觉拦截次数")
 LATENCY = Histogram(
-    "insight_request_seconds",
+    "deepquery_request_seconds",
     "单次提问端到端延迟",
     buckets=(0.5, 1, 2, 4, 8, 16, 32, 64),
 )
-TOKENS = Counter("insight_llm_tokens_total", "累计 LLM token 消耗")
-COST = Counter("insight_llm_cost_total", "累计 LLM 成本（按 .env 单价折算）")
+TOKENS = Counter("deepquery_llm_tokens_total", "累计 LLM token 消耗")
+COST = Counter("deepquery_llm_cost_total", "累计 LLM 成本（按 .env 单价折算）")
 
 _CHART_NAME = re.compile(r"^chart-[0-9a-f]{12}\.png$")
 
@@ -110,10 +110,10 @@ def _outcome_payload(outcome: RunOutcome, cached: bool = False) -> dict:
     }
 
 
-def create_app(agent: InsightAgent | None = None, settings: Settings | None = None) -> FastAPI:
+def create_app(agent: DeepQuery | None = None, settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     cache: BaseCache = build_cache(settings)
-    app = FastAPI(title="insight-agent", docs_url=None, redoc_url=None)
+    app = FastAPI(title="deepquery", docs_url=None, redoc_url=None)
     if settings.cors_allow_origins:  # 独立前端（如 Vue3 dev server）联调用
         from fastapi.middleware.cors import CORSMiddleware
 
@@ -125,7 +125,7 @@ def create_app(agent: InsightAgent | None = None, settings: Settings | None = No
         )
     state = {"agent": agent}
 
-    def get_agent() -> InsightAgent:
+    def get_agent() -> DeepQuery:
         if state["agent"] is None:  # 惰性构建：测试可注入，生产首个请求时组装
             from . import build_agent
 
@@ -284,7 +284,7 @@ PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>InsightAgent · 数据查询台</title>
+<title>DeepQuery · 数据查询台</title>
 <style>
   :root {
     --bg: #f7f8fa; --panel: #ffffff; --text: #1d2129; --muted: #86909c;
@@ -494,7 +494,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <div class="topbar">
-  <div class="brand">Insight<span>Agent</span> <span class="sub">数据查询台</span></div>
+  <div class="brand">Deep<span>Query</span> <span class="sub">数据查询台</span></div>
   <div class="env">
     <span id="envinfo"></span>
     <button class="iconbtn" id="theme" title="切换主题">主题</button>

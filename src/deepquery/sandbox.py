@@ -44,7 +44,7 @@ class BaseSandbox:
         raise NotImplementedError
 
     def _prepare(self, code: str, data: dict) -> str:
-        workdir = tempfile.mkdtemp(prefix="insight-chart-")
+        workdir = tempfile.mkdtemp(prefix="deepquery-chart-")
         Path(workdir, "data.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         Path(workdir, "chart.py").write_text(code, encoding="utf-8")
         return workdir

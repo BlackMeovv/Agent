@@ -5,8 +5,8 @@ import sqlite3
 
 import pytest
 
-from insight_agent.evalkit.prepare import prepare, sample_cases
-from insight_agent.evalkit.runner import load_cases, run_eval
+from deepquery.evalkit.prepare import prepare, sample_cases
+from deepquery.evalkit.runner import load_cases, run_eval
 
 
 @pytest.fixture()

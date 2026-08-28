@@ -1,8 +1,8 @@
 """追踪接线测试：用 FakeTracer 验证 agent 在正确的位置上报了正确的内容。"""
 
-from insight_agent.agent import InsightAgent
-from insight_agent.llm import MockLLM
-from insight_agent.tracing import NOOP_TRACER, RunTrace, Tracer, build_tracer
+from deepquery.agent import DeepQuery
+from deepquery.llm import MockLLM
+from deepquery.tracing import NOOP_TRACER, RunTrace, Tracer, build_tracer
 
 
 class FakeRunTrace(RunTrace):
@@ -42,7 +42,7 @@ def sql_reply(sql):
 class TestTracingWiring:
     def test_full_run_traced(self, settings, db):
         tracer = FakeTracer()
-        agent = InsightAgent(
+        agent = DeepQuery(
             settings,
             db,
             MockLLM([sql_reply("SELECT nope FROM customers"), sql_reply("SELECT COUNT(*) FROM customers"), "答案"]),
@@ -66,7 +66,7 @@ class TestTracingWiring:
         assert trace.ended["usage"]["llm_calls"] == 3
 
     def test_default_tracer_is_noop(self, settings, db):
-        agent = InsightAgent(settings, db, MockLLM([sql_reply("SELECT COUNT(*) FROM customers")]))
+        agent = DeepQuery(settings, db, MockLLM([sql_reply("SELECT COUNT(*) FROM customers")]))
         assert agent.tracer is NOOP_TRACER
         outcome = agent.ask("客户数？", generate_answer=False)  # 不抛异常即可
         assert outcome.status == "ok"

@@ -1,4 +1,4 @@
-from insight_agent.guard import validate
+from deepquery.guard import validate
 
 TABLES = {"customers", "orders", "products", "categories", "order_items", "payments"}
 

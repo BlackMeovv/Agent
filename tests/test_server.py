@@ -5,9 +5,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from insight_agent.agent import InsightAgent
-from insight_agent.llm import MockLLM
-from insight_agent.server import create_app
+from deepquery.agent import DeepQuery
+from deepquery.llm import MockLLM
+from deepquery.server import create_app
 
 
 def sse_events(text: str) -> list[tuple[str, dict]]:
@@ -30,7 +30,7 @@ def client(settings, db):
         ],
         cycle=True,
     )
-    agent = InsightAgent(settings, db, llm)
+    agent = DeepQuery(settings, db, llm)
     app = create_app(agent=agent, settings=settings)
     with TestClient(app) as c:
         c.agent_llm = llm
@@ -44,14 +44,14 @@ class TestBasics:
 
     def test_index_page(self, client):
         resp = client.get("/")
-        assert resp.status_code == 200 and "InsightAgent" in resp.text
+        assert resp.status_code == 200 and "DeepQuery" in resp.text
         for block in ("数据表", "口径记忆", "查询历史", "运行过程"):  # 三栏控制台关键区块
             assert block in resp.text
 
     def test_metrics(self, client):
         client.get("/api/ask", params={"question": "上海的客户一共有多少个？"})
         text = client.get("/metrics").text
-        assert "insight_requests_total" in text and "insight_request_seconds" in text
+        assert "deepquery_requests_total" in text and "deepquery_request_seconds" in text
 
 
 class TestAskStream:
@@ -131,11 +131,11 @@ class TestWebDistServing:
         (dist / "index.html").write_text("<html><body>VUE-APP</body></html>", encoding="utf-8")
         (dist / "assets" / "app.js").write_text("console.log(1)", encoding="utf-8")
         cfg = settings.model_copy(update={"web_dist": str(dist)})
-        from insight_agent.agent import InsightAgent
-        from insight_agent.llm import MockLLM
+        from deepquery.agent import DeepQuery
+        from deepquery.llm import MockLLM
 
-        app = create_app(agent=InsightAgent(cfg, db, MockLLM(["x"])), settings=cfg)
+        app = create_app(agent=DeepQuery(cfg, db, MockLLM(["x"])), settings=cfg)
         with TestClient(app) as c:
             assert "VUE-APP" in c.get("/").text
             assert c.get("/assets/app.js").status_code == 200
-            assert "InsightAgent" in c.get("/legacy").text  # 内置页降为后备
+            assert "DeepQuery" in c.get("/legacy").text  # 内置页降为后备

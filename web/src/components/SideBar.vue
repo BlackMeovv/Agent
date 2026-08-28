@@ -43,8 +43,8 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
 <template>
   <aside class="side">
     <div class="brand">
-      <div class="logo">IA</div>
-      <div class="name serif">Insight</div>
+      <div class="logo">DQ</div>
+      <div class="name serif">DeepQuery</div>
     </div>
 
     <div class="pad">

@@ -1,9 +1,9 @@
 """沙箱执行器测试（SubprocessSandbox，离线）。"""
 
-from insight_agent.agent import InsightAgent
-from insight_agent.agent.graph import extract_code
-from insight_agent.llm import MockLLM
-from insight_agent.sandbox import SubprocessSandbox
+from deepquery.agent import DeepQuery
+from deepquery.agent.graph import extract_code
+from deepquery.llm import MockLLM
+from deepquery.sandbox import SubprocessSandbox
 
 # 不依赖 matplotlib 的"画图"代码：直接写一个 PNG 头，验证执行器机制本身
 FAKE_CHART_CODE = """
@@ -48,7 +48,7 @@ class TestChartNode:
         cfg = settings.model_copy(
             update={"chart_executor": "subprocess", "chart_out_dir": str(tmp_path)}
         )
-        agent = InsightAgent(
+        agent = DeepQuery(
             cfg,
             db,
             MockLLM(
@@ -66,7 +66,7 @@ class TestChartNode:
         cfg = settings.model_copy(
             update={"chart_executor": "subprocess", "chart_out_dir": str(tmp_path)}
         )
-        agent = InsightAgent(
+        agent = DeepQuery(
             cfg,
             db,
             MockLLM(
@@ -85,7 +85,7 @@ class TestChartNode:
         cfg = settings.model_copy(
             update={"chart_executor": "subprocess", "chart_out_dir": str(tmp_path)}
         )
-        agent = InsightAgent(
+        agent = DeepQuery(
             cfg,
             db,
             MockLLM(

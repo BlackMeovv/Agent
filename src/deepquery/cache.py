@@ -23,7 +23,7 @@ def cache_key(question: str, *, db_path: str, model: str, chart: bool) -> str:
         ensure_ascii=False,
         sort_keys=True,
     )
-    return "insight:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return "deepquery:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class BaseCache:
@@ -92,10 +92,10 @@ def build_cache(settings: "Settings") -> BaseCache:
             return RedisCache(settings.redis_url, settings.cache_ttl_seconds)
         except ImportError:
             print(
-                "[insight-agent] 配置了 REDIS_URL 但未安装 redis 包，"
+                "[deepquery] 配置了 REDIS_URL 但未安装 redis 包，"
                 "已回退进程内缓存。启用：uv sync --extra cache",
                 file=sys.stderr,
             )
         except Exception as e:
-            print(f"[insight-agent] Redis 连接失败，已回退进程内缓存: {e}", file=sys.stderr)
+            print(f"[deepquery] Redis 连接失败，已回退进程内缓存: {e}", file=sys.stderr)
     return MemoryCache(settings.cache_ttl_seconds)

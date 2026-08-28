@@ -1,4 +1,4 @@
-from insight_agent.evalkit.report import _case_success, compare, mcnemar_between, render_markdown
+from deepquery.evalkit.report import _case_success, compare, mcnemar_between, render_markdown
 
 
 def fake_report(label, ids_success: dict[str, bool]):

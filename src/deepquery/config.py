@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # 图表沙箱：docker（生产）/ subprocess（开发兜底）/ auto（有 docker 用 docker）
     chart_executor: str = "auto"
-    chart_image: str = "insight-agent-chart"
+    chart_image: str = "deepquery-chart"
     chart_timeout_seconds: float = 20
     chart_out_dir: str = "data/charts"
 

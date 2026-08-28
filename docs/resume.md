@@ -5,13 +5,13 @@
 
 ## 项目名与一句话定位
 
-**insight-agent —— 企业数据分析 Agent（NL2SQL + 图表 + 结论，自带评测闭环）**
+**deepquery —— 企业数据分析 Agent（NL2SQL + 图表 + 结论，自带评测闭环）**
 
 GitHub: github.com/BlackMeovv/Agent（简历上放这个链接，确保 README 首屏有消融表和 demo GIF）
 
 ## "项目内容 / 承担工作"两段式（校招简历常用格式，可直接粘贴）
 
-**InsightAgent：基于 LangGraph 与确定性守卫的企业数据问答 Agent（个人项目，开源）** 　2025.XX–2026.XX
+**DeepQuery：基于 LangGraph 与确定性守卫的企业数据问答 Agent（个人项目，开源）** 　2025.XX–2026.XX
 
 ➢ **项目内容**：面向企业临时取数场景——业务人员的长尾查询需提工单排队等数据分析师、
 仪表盘只覆盖预设问题——构建对话式数据问答 Agent，解决 LLM 生成 SQL 落地中的三个核心

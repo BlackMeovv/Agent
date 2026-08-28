@@ -1,8 +1,8 @@
 """多数据库引擎支持：SQLite 文件 / MySQL / PostgreSQL 连接串即插即用。
 
     DB_PATH=data/demo/ecommerce.sqlite                    # SQLite 文件
-    DB_PATH=mysql://readonly:pwd@localhost:3306/insight   # MySQL（uv sync --extra mysql）
-    DB_PATH=postgres://readonly:pwd@localhost:5432/insight  # PostgreSQL（--extra postgres）
+    DB_PATH=mysql://readonly:pwd@localhost:3306/deepquery   # MySQL（uv sync --extra mysql）
+    DB_PATH=postgres://readonly:pwd@localhost:5432/deepquery  # PostgreSQL（--extra postgres）
 
 只读纵深在服务器引擎上的形态与 SQLite 不同：
 1. 第一道仍是 sqlglot AST 守卫（只放行单条 SELECT，按方言解析）；

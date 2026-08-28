@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from insight_agent.evalkit.runner import load_cases
-from insight_agent.evalkit.scorer import execution_match
-from insight_agent.guard import validate
+from deepquery.evalkit.runner import load_cases
+from deepquery.evalkit.scorer import execution_match
+from deepquery.guard import validate
 
 CASES = load_cases(Path(__file__).parent.parent / "eval" / "cases" / "smoke.jsonl")
 
@@ -37,7 +37,7 @@ def test_demo_db_deterministic(tmp_path):
     """演示库必须可复现：两次构建的行数与金额校验和一致。"""
     import sqlite3
 
-    from insight_agent.demo_data import build
+    from deepquery.demo_data import build
 
     def checksum(path):
         conn = sqlite3.connect(path)

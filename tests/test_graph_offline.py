@@ -1,11 +1,11 @@
 """用 MockLLM 离线走通 agent 全链路：不需要任何 API Key。"""
 
-from insight_agent.agent import InsightAgent
-from insight_agent.llm import MockLLM
+from deepquery.agent import DeepQuery
+from deepquery.llm import MockLLM
 
 
 def make_agent(settings, db, replies):
-    return InsightAgent(settings, db, MockLLM(replies))
+    return DeepQuery(settings, db, MockLLM(replies))
 
 
 def sql_reply(sql: str) -> str:

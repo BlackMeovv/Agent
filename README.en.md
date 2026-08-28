@@ -1,4 +1,4 @@
-# insight-agent
+# deepquery
 
 An enterprise data-analysis agent: ask questions in natural language, get guarded SQL,
 self-repaired execution, sandboxed charts, and verified answers — with a reproducible

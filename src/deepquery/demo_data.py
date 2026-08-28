@@ -1,7 +1,7 @@
 """确定性电商演示库生成器。
 
 固定随机种子：同一版本代码生成的库逐字节内容一致（时间戳字符串固定生成），
-评测数字因此可复现。运行：`python -m insight_agent.demo_data` 或 `make demo-db`。
+评测数字因此可复现。运行：`python -m deepquery.demo_data` 或 `make demo-db`。
 """
 
 from __future__ import annotations
@@ -261,7 +261,7 @@ def dump_sql(dialect: str) -> str:
         build(db_file)
         conn = sqlite3.connect(db_file)
         try:
-            lines = ["-- insight-agent 演示库（确定性生成，seed=42）", ""]
+            lines = ["-- deepquery 演示库（确定性生成，seed=42）", ""]
             lines.append(_DDL_MYSQL if dialect == "mysql" else _DDL_POSTGRES)
             for table in ("categories", "customers", "products", "orders", "order_items", "payments"):
                 rows = conn.execute(f"SELECT * FROM {table}").fetchall()
