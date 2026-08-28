@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Schema RAG：on=强制启用 / off=全量 schema / auto=表数超过 top_k 才启用
     schema_rag: str = "auto"
     schema_rag_top_k: int = 6
+    # auto 模式启用检索的阈值：全量 schema 字符数超过它才检索选表。
+    # BIRD 150 题消融实测：装得下时全量直供 64.7% vs 检索 61.3%（召回缺口即失分），
+    # 且检索只省 ~3% token——所以按体积而非表数决定
+    schema_rag_auto_max_chars: int = 16000
     # 业务字典 / few-shot 例句（jsonl，选填；路径不存在则自动跳过）
     glossary_path: str = "eval/knowledge/glossary.jsonl"
     examples_path: str = "eval/knowledge/examples.jsonl"

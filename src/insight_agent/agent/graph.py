@@ -169,12 +169,18 @@ class InsightAgent:
     ) -> tuple[str, list[str] | None, dict]:
         """按问题组装 schema 上下文。
 
-        大库不能全量塞 prompt（贵且触发 Lost in the Middle）——auto 模式下
-        表数超过 top_k 才启用检索选表；命中的业务字典与相似例句始终附加。
+        大库不能全量塞 prompt（贵且触发 Lost in the Middle）——auto 模式按
+        全量 schema 体积决定是否检索选表（装得下就直供；BIRD 消融显示检索在
+        装得下时只亏不赚）；命中的业务字典与相似例句始终附加。
         """
         mode = self.settings.schema_rag
         k = self.settings.schema_rag_top_k
-        use_rag = mode == "on" or (mode == "auto" and len(self._table_docs) > k)
+        full_chars = sum(len(d) for d in self._table_docs.values())
+        use_rag = mode == "on" or (
+            mode == "auto"
+            and len(self._table_docs) > k
+            and full_chars > self.settings.schema_rag_auto_max_chars
+        )
         if use_rag:
             selected = self._retriever.top_tables(question, k)
             context = "\n\n".join(self._table_docs[t] for t in selected)

@@ -149,3 +149,23 @@ class TestRunnerTableRecall:
         assert report["summary"]["ex_accuracy"] == 1.0
         assert report["summary"]["avg_table_recall"] == 1.0
         assert report["results"][0]["table_recall"] == 1.0
+
+
+class TestSchemaRagAutoBySize:
+    """auto 判据按 schema 体积而非表数——BIRD 消融驱动的架构决策回归测试。"""
+
+    def test_many_small_tables_stay_full(self, settings, db):
+        # 6 表 > top_k=2，但全量体积远小于阈值：不检索，直供全量 schema
+        cfg = settings.model_copy(update={"schema_rag": "auto", "schema_rag_top_k": 2})
+        agent, llm = make_agent(cfg, db, [sql_reply(GOOD_SQL)])
+        outcome = agent.ask("上海的客户数？", generate_answer=False)
+        assert outcome.selected_tables is None
+        assert llm.calls[0][1]["content"].count("CREATE TABLE") == 6
+
+    def test_oversized_schema_enables_rag(self, settings, db):
+        cfg = settings.model_copy(
+            update={"schema_rag": "auto", "schema_rag_top_k": 2, "schema_rag_auto_max_chars": 10}
+        )
+        agent, _ = make_agent(cfg, db, [sql_reply(GOOD_SQL)])
+        outcome = agent.ask("上海的客户数？", generate_answer=False)
+        assert outcome.selected_tables is not None and len(outcome.selected_tables) == 2
