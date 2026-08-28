@@ -71,6 +71,7 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
         <span class="mchev" :class="{ open: schemaOpen }">›</span>
       </div>
       <div v-if="schemaOpen" class="tree">
+        <div class="treehint">这是 Agent 能看到的全部表；点列名可插入到输入框</div>
         <div v-for="tb in store.schema" :key="tb.name">
           <div class="trow" @click="openTables[tb.name] = !openTables[tb.name]">
             <span class="chev" :class="{ open: openTables[tb.name] }">›</span>
@@ -102,6 +103,7 @@ onBeforeUnmount(() => document.removeEventListener("click", closeMenu));
         <span class="mchev" :class="{ open: memOpen }">›</span>
       </div>
       <div v-if="memOpen" class="mems">
+        <div class="treehint">Agent 的跨会话记忆：教它你的业务口径，之后每次提问自动带上</div>
         <div v-for="mm in store.mems" :key="mm.id" class="mem">
           <span class="mtext">{{ mm.note }}</span>
           <span class="mdel" @click="store.delMem(mm.id)">✕</span>
@@ -183,6 +185,7 @@ body[data-theme="dark"] .newbtn { color: #201e1d; }
 .mchev { font-size: 12px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }
 .mchev.open { transform: rotate(90deg); }
 .tree { padding: 2px 0 6px; }
+.treehint { font-size: 11px; color: var(--ink3); padding: 2px 12px 6px; line-height: 1.5; }
 .trow { display: flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 13px; }
 .trow:hover { background: var(--card); }
 .chev { width: 10px; font-size: 11px; color: var(--ink3); transition: transform 0.15s; display: inline-block; }

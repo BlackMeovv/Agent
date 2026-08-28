@@ -77,9 +77,13 @@ input, button, textarea { font-family: inherit; }
   70% { box-shadow: 0 0 0 9px transparent; }
 }
 
+/* 滚动条：默认隐身，滚动时出现，停手后淡出（.scrolling 由 main.ts 维护） */
 ::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+.scrolling::-webkit-scrollbar-thumb { background: var(--line); }
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.scrolling { scrollbar-color: var(--line) transparent; }
 
 /* 双色旋转圆环（设计稿的运行指示器）：conic 渐变模拟前景弧 */
 .spinner {
