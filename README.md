@@ -17,6 +17,20 @@
              └─ fallback       轮次/预算耗尽时的无 LLM 降级收尾
 ```
 
+## 评测结果（实测，全部可复现）
+
+| 评测集 | 配置 | EX（95% CI） | 说明 |
+|---|---|---|---|
+| 业务集 dev · 165 题 ×3 | baseline | 93.3% [90.8, 95.2] | 失败模式分析 → 定向修复 |
+| 业务集 dev · 165 题 ×3 | 口径注入 + 输出纪律 | **97.8% [96.1, 98.8]** | 按题配对翻转 5:0（零回归） |
+| 业务集 holdout · 71 题 ×3（密封） | 同上 | **97.7% [94.6, 99.0]** | 提升无过拟合 |
+| BIRD dev · 150 题固定子集 | 全量 schema 直供 | **64.7% [56.7, 71.9]** | 参照：BIRD 论文 GPT-4 基线 46.4% |
+| BIRD dev · 150 题固定子集 | 检索选表（RAG） | 61.3% [53.3, 68.8] | 选表召回 95.5%；消融结论：上下文装得下时直供更优 → auto 判据据此改为按 schema 体积 |
+
+复现：`make business LABEL=x` / `make bird ROOT=... LABEL=x`（模型走任意 OpenAI 兼容接口）。
+每次跑分的完整 JSON 与对比报告在 [eval/results/](eval/results/)，
+失败案例逐条复盘（含根因验证与修复前后对比）见 [docs/badcases.md](docs/badcases.md)。
+
 ## 快速开始
 
 ```bash
@@ -135,5 +149,6 @@ make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 - [x] Week 2：BIRD/Spider 基准接入、Langfuse 追踪、Wilson 置信区间 + McNemar 检验、消融对比报告
 - [x] Week 3：Schema RAG（BM25+向量混合检索选表 + 选表召回率指标）、业务字典/few-shot 例句注入、按错误类型的修复提示、防幻觉数字校验
 - [x] Week 4：图表沙箱（Docker/子进程双执行器 + 静态拒绝清单）、FastAPI + SSE 流式服务与演示网页、docker compose 一键部署
-- [x] Week 5+：MCP server、跨会话记忆、236 条自建业务评测集（dev/holdout）、Redis 结果缓存、Prometheus/Grafana 大盘、locust 压测脚本
-- [ ] 待办：跑真实模型基线与消融（需 API Key）、多模型横评数据、MySQL/Postgres 方言适配
+- [x] Week 5+：MCP server、跨会话记忆、236 条自建业务评测集（dev/holdout）、Redis 结果缓存、Prometheus/Grafana 大盘、locust 压测脚本、MySQL/Postgres 只读接入（方言提示线程化）
+- [x] 真实模型基线与迭代：业务集 93.3%→97.8%（holdout 97.7% 复核）、BIRD 64.7% + RAG 消融驱动检索策略修正
+- [ ] 待办：多模型横评、在线 Demo 部署（访问口令）、demo GIF
