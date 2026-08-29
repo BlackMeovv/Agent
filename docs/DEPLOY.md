@@ -103,3 +103,5 @@ named volume `app-data` 里，重建不丢。
   EventSource 无法携带自定义请求头，口令走查询参数——这也是为什么建议上 HTTPS
 - 图表代码在容器内以 subprocess + rlimit 执行，容器本身是隔离边界
 - 预算熔断兜底：口令泄露最坏情况也只是有限的 API 花费
+- 表级权限：`.env` 配 `ALLOWED_TABLES=orders,products` 可让公开演示只暴露
+  部分表——schema 注入、守卫白名单、前端库表树、MCP 工具同步过滤

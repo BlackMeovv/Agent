@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import hmac
 import json
+import queue
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -174,8 +176,10 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
 
     @app.get("/api/schema")
     def api_schema():
-        cols = get_agent().db.table_columns()
-        return {"tables": [{"name": t, "columns": c} for t, c in cols.items()]}
+        agent_ = get_agent()
+        visible = agent_.allowed_tables  # 表级权限：前端库表树与 Agent 视野同源
+        cols = agent_.db.table_columns()
+        return {"tables": [{"name": t, "columns": c} for t, c in cols.items() if t in visible]}
 
     # ---- 记忆管理（口径偏好）----
 
@@ -254,12 +258,39 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
                 cached_payload["latency_ms"] = int((time.monotonic() - start) * 1000)
                 yield _sse("final", cached_payload)
                 return
+            # 节点事件与回答逐字增量都要实时推送，但增量产生在 ask_stream 内部的
+            # LLM 调用期间（此时生成器阻塞在 next() 上）——所以放到工作线程跑，
+            # 通过队列把 node/delta/final 依序送回 SSE 生成器
+            q: queue.Queue = queue.Queue()
+
+            def pump():
+                try:
+                    for kind, item, extra in agent_.ask_stream(
+                        question,
+                        generate_chart=chart,
+                        user_id=user,
+                        on_answer_delta=lambda text: q.put(("delta", {"text": text})),
+                    ):
+                        if kind == "node":
+                            q.put(("node", _node_event(item, extra or {})))
+                        else:
+                            q.put(("outcome", item))
+                except BaseException as e:  # noqa: BLE001 —— 原样转交给请求线程抛出
+                    q.put(("error", e))
+                q.put(("end", None))
+
+            threading.Thread(target=pump, daemon=True).start()
             outcome: RunOutcome | None = None
-            for kind, item, extra in agent_.ask_stream(question, generate_chart=chart, user_id=user):
-                if kind == "node":
-                    yield _sse("node", _node_event(item, extra or {}))
-                else:
+            while True:
+                kind, item = q.get()
+                if kind == "end":
+                    break
+                if kind == "error":
+                    raise item
+                if kind == "outcome":
                     outcome = item
+                    continue
+                yield _sse(kind, item)
             assert outcome is not None
             payload = _outcome_payload(outcome)
             REQUESTS.labels(status=outcome.status).inc()

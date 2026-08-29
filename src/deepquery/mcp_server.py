@@ -53,7 +53,7 @@ def run_sql(sql: str) -> dict[str, Any]:
     agent = _get_agent()
     verdict = validate(
         sql,
-        allowed_tables=set(agent.db.table_names()),
+        allowed_tables=agent.allowed_tables,
         max_rows=agent.settings.sql_max_rows,
         dialect=agent.db.dialect,
     )
@@ -72,8 +72,8 @@ def run_sql(sql: str) -> dict[str, Any]:
 
 
 def get_schema() -> str:
-    """返回数据库 schema（建表语句 + 样例行）。"""
-    return _get_agent().db.schema_text()
+    """返回数据库 schema（建表语句 + 样例行；已按表级权限过滤）。"""
+    return _get_agent().full_schema
 
 
 def remember_preference(note: str, user: str = "default") -> str:

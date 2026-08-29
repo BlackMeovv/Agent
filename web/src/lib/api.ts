@@ -106,6 +106,8 @@ export async function deleteMemory(id: number, user = "default"): Promise<void> 
 
 export interface AskCallbacks {
   onNode: (event: NodeEvent) => void;
+  /** 回答逐字流式：text 是当前调用的累积全文（重写时整体替换即可） */
+  onDelta?: (text: string) => void;
   onFinal: (payload: FinalPayload) => void;
   onError: () => void;
 }
@@ -122,6 +124,7 @@ export function askStream(
     `&chart=${chart ? 1 : 0}&user=${encodeURIComponent(user)}${codeQS()}`;
   const es = new EventSource(url);
   es.addEventListener("node", (e) => callbacks.onNode(JSON.parse((e as MessageEvent).data)));
+  es.addEventListener("delta", (e) => callbacks.onDelta?.(JSON.parse((e as MessageEvent).data).text));
   es.addEventListener("final", (e) => {
     callbacks.onFinal(JSON.parse((e as MessageEvent).data));
     es.close();

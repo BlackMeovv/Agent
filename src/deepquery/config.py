@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # 回答防幻觉数字校验
     answer_verify: bool = True
 
+    # 表级权限（选填）：逗号分隔的可见表名，配置后 Agent 只能看见/查询这些表
+    # （schema 注入、守卫白名单、/api/schema、MCP 工具同步过滤）；空 = 全部可见。
+    # 多角色部署按角色起实例配不同值——权限硬边界仍应放在数据库只读账号的 GRANT
+    allowed_tables: str = ""
+
     # 图表沙箱：docker（生产）/ subprocess（开发兜底）/ auto（有 docker 用 docker）
     chart_executor: str = "auto"
     chart_image: str = "deepquery-chart"

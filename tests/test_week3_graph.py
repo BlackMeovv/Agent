@@ -169,3 +169,30 @@ class TestSchemaRagAutoBySize:
         agent, _ = make_agent(cfg, db, [sql_reply(GOOD_SQL)])
         outcome = agent.ask("上海的客户数？", generate_answer=False)
         assert outcome.selected_tables is not None and len(outcome.selected_tables) == 2
+
+
+class TestAllowedTables:
+    """表级权限：ALLOWED_TABLES 过滤 Agent 视野与守卫白名单。"""
+
+    def test_hidden_table_invisible_and_rejected(self, settings, db):
+        cfg = settings.model_copy(update={"allowed_tables": "customers"})
+        agent, llm = make_agent(
+            cfg, db, [sql_reply("SELECT COUNT(*) FROM orders"), sql_reply(GOOD_SQL)]
+        )
+        assert agent.allowed_tables == {"customers"}
+        assert set(agent._table_docs) == {"customers"}  # schema 注入只含可见表
+        outcome = agent.ask("客户数？", generate_answer=False)
+        # 第一条 SQL 查了隐藏表 orders：守卫拒绝 → 修复为 customers → 成功
+        assert outcome.status == "ok"
+        assert "customers" in outcome.final_sql
+        assert any(a.error_kind == "guard_rejected" for a in outcome.attempts)
+
+    def test_case_insensitive_and_unknown_ignored(self, settings, db, capsys):
+        cfg = settings.model_copy(update={"allowed_tables": "CUSTOMERS, no_such_table"})
+        agent, _ = make_agent(cfg, db, [sql_reply(GOOD_SQL)])
+        assert agent.allowed_tables == {"customers"}
+        assert "no_such_table" in capsys.readouterr().err
+
+    def test_empty_config_means_all_tables(self, settings, db):
+        agent, _ = make_agent(settings, db, [sql_reply(GOOD_SQL)])
+        assert agent.allowed_tables == set(db.table_names())

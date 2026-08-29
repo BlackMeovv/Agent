@@ -213,6 +213,10 @@ export const useAppStore = defineStore("app", {
       };
 
       this.stream = askStream(q, this.chartOn, {
+        onDelta: (text) => {
+          const m = this.msgs.find((x) => x.id === aiId) as AiMsg;
+          if (m.status === "running") m.answer = text;
+        },
         onNode: (e) => {
           const m = this.msgs.find((x) => x.id === aiId) as AiMsg;
           m.steps.push({

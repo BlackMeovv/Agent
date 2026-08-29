@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, TypedDict
@@ -88,6 +89,7 @@ class _State(TypedDict, total=False):
     hallucination_blocked: bool
     meter: Any  # UsageMeter（对象通道，就地累加）
     trace: Any  # RunTrace（追踪句柄，未启用时为 no-op）
+    on_answer_delta: Any  # 可选回调：回答生成的流式增量（SSE 逐字输出用）
 
 
 _CODE_BLOCK = re.compile(r"```([a-zA-Z0-9_-]*)[ \t]*\n?(.*?)```", re.DOTALL)
@@ -141,6 +143,20 @@ _CHART_CODE_DENY = re.compile(
 )
 
 
+def resolve_allowed_tables(settings: Settings, db) -> set[str]:
+    """表级权限：ALLOWED_TABLES 与库中实际表求交集（大小写不敏感）；不配置=全部可见。"""
+    all_tables = set(db.table_names())
+    configured = {t.strip() for t in settings.allowed_tables.split(",") if t.strip()}
+    if not configured:
+        return all_tables
+    wanted = {t.lower() for t in configured}
+    visible = {t for t in all_tables if t.lower() in wanted}
+    missing = wanted - {t.lower() for t in visible}
+    if missing:
+        print(f"[deepquery] ALLOWED_TABLES 中不存在的表已忽略: {', '.join(sorted(missing))}", file=sys.stderr)
+    return visible
+
+
 class DeepQuery:
     def __init__(
         self,
@@ -155,14 +171,28 @@ class DeepQuery:
         self.db = db
         self.llm = llm
         self.tracer = tracer or NOOP_TRACER
-        self._allowed_tables = set(db.table_names())
-        self._table_docs = db.schema_by_table()
+        # 表级权限：白名单、schema 注入、RAG 语料同源过滤——模型看不见的表既不会
+        # 出现在 prompt 里，也过不了守卫（纵深的应用层；硬边界在 DB 只读账号）
+        self._allowed_tables = resolve_allowed_tables(settings, db)
+        self._table_docs = {
+            t: doc for t, doc in db.schema_by_table().items() if t in self._allowed_tables
+        }
         self._full_schema = "\n\n".join(self._table_docs.values())
         self._retriever = SchemaRetriever(self._table_docs, embedder=build_embedder(settings))
         self._glossary = load_glossary(settings.glossary_path)
         self._examples = load_examples(settings.examples_path)
         self._sandbox = None  # 图表沙箱按需构建
         self._graph = self._build_graph()
+
+    @property
+    def allowed_tables(self) -> set[str]:
+        """当前实例可见/可查询的表集合（供 server 与 MCP 工具复用同一权限口径）。"""
+        return set(self._allowed_tables)
+
+    @property
+    def full_schema(self) -> str:
+        """权限过滤后的全量 schema 文本。"""
+        return self._full_schema
 
     def _build_schema_context(
         self, question: str, user_id: str = "default"
@@ -237,15 +267,19 @@ class DeepQuery:
         generate_answer: bool = True,
         generate_chart: bool = False,
         user_id: str = "default",
+        on_answer_delta=None,
     ):
         """逐节点流式执行（服务端 SSE 用）。
 
         依次 yield ("node", 节点名, 增量状态)，最后 yield ("final", RunOutcome, None)。
+        on_answer_delta：回答文本的逐字增量回调（在 answer 节点的 LLM 调用中触发）。
         """
         start = time.monotonic()
         state, meter, trace, selected_tables = self._prepare_run(
             question, generate_answer, generate_chart, user_id
         )
+        if on_answer_delta is not None:
+            state["on_answer_delta"] = on_answer_delta
         final_state: dict = dict(state)
         try:
             for update in self._graph.stream(state, config=self._run_config(), stream_mode="updates"):
@@ -580,8 +614,9 @@ class DeepQuery:
                 ),
             },
         ]
+        on_delta = state.get("on_answer_delta")
         try:
-            reply = self.llm.chat(messages, state["meter"], tag="answer")
+            reply = self.llm.chat(messages, state["meter"], tag="answer", on_delta=on_delta)
         except (BudgetExceeded, LLMError):
             # 总结失败不影响查询本身的成功：降级为直接给数据预览
             return {"status": "ok", "answer": f"查询成功，结果如下：\n{last_ok.result.preview()}"}
@@ -604,7 +639,10 @@ class DeepQuery:
                 },
             ]
             try:
-                retry_reply = self.llm.chat(retry_messages, state["meter"], tag="answer_retry")
+                # 重写也走流式：前端以"当前调用的累积文本"整体替换，草稿自然被覆盖
+                retry_reply = self.llm.chat(
+                    retry_messages, state["meter"], tag="answer_retry", on_delta=on_delta
+                )
                 self._record_generation(state, "answer_retry", retry_messages, retry_reply)
                 retry_text = retry_reply.text.strip()
                 violations = check_answer(

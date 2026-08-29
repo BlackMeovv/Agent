@@ -43,7 +43,9 @@ def estimate_tokens(texts) -> int:
 class BaseLLM:
     model_name: str = "unknown"
 
-    def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "") -> LLMReply:
+    def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "", on_delta=None) -> LLMReply:
+        """on_delta: 可选的流式回调，每收到一段增量就以「当前累积全文」调用一次。
+        实现方保证：无论是否流式，返回值语义完全一致。"""
         raise NotImplementedError
 
 
@@ -63,7 +65,7 @@ class LLMClient(BaseLLM):
             max_retries=0,  # 重试策略自己控制，便于记录与退避
         )
 
-    def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "") -> LLMReply:
+    def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "", on_delta=None) -> LLMReply:
         meter.check()
         settings = self._settings
         delay = 2.0
@@ -71,17 +73,20 @@ class LLMClient(BaseLLM):
         for attempt in range(settings.llm_max_retries + 1):
             start = time.monotonic()
             try:
-                resp = self._client.chat.completions.create(
-                    model=settings.llm_model,
-                    messages=messages,
-                    temperature=settings.llm_temperature,
-                )
+                if on_delta is not None:
+                    text, usage = self._chat_streaming(messages, on_delta)
+                else:
+                    resp = self._client.chat.completions.create(
+                        model=settings.llm_model,
+                        messages=messages,
+                        temperature=settings.llm_temperature,
+                    )
+                    choices = getattr(resp, "choices", None)
+                    if not choices:
+                        raise LLMError(f"LLM 返回空 choices（model={settings.llm_model}）")
+                    text = choices[0].message.content or ""
+                    usage = getattr(resp, "usage", None)
                 latency_ms = int((time.monotonic() - start) * 1000)
-                choices = getattr(resp, "choices", None)
-                if not choices:
-                    raise LLMError(f"LLM 返回空 choices（model={settings.llm_model}）")
-                text = choices[0].message.content or ""
-                usage = getattr(resp, "usage", None)
                 prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
                 completion_tokens = getattr(usage, "completion_tokens", 0) or 0
                 if prompt_tokens == 0 and completion_tokens == 0:
@@ -109,6 +114,37 @@ class LLMClient(BaseLLM):
                 delay *= 2
         raise LLMError(f"LLM 调用重试 {settings.llm_max_retries} 次后仍失败: {last_error}") from last_error
 
+    def _chat_streaming(self, messages: list[dict], on_delta):
+        """流式调用：逐块累积文本并回调。
+
+        不传 stream_options（部分中转会 400）；多数 OpenAI 兼容端会在末块带 usage，
+        没有就落到调用方的字符估算兜底——预算熔断不因流式而失效。
+        """
+        settings = self._settings
+        stream = self._client.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            temperature=settings.llm_temperature,
+            stream=True,
+        )
+        parts: list[str] = []
+        usage = None
+        for chunk in stream:
+            u = getattr(chunk, "usage", None)
+            if u is not None:
+                usage = u
+            choices = getattr(chunk, "choices", None)
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            piece = getattr(delta, "content", None) if delta is not None else None
+            if piece:
+                parts.append(piece)
+                on_delta("".join(parts))
+        if not parts and usage is None:
+            raise LLMError(f"LLM 流式返回为空（model={settings.llm_model}）")
+        return "".join(parts), usage
+
 
 class MockLLM(BaseLLM):
     """离线 mock：按脚本顺序吐回复。replies 用完后重复最后一条；
@@ -124,7 +160,7 @@ class MockLLM(BaseLLM):
         self._i = 0
         self.calls: list[list[dict]] = []
 
-    def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "") -> LLMReply:
+    def chat(self, messages: list[dict], meter: UsageMeter, tag: str = "", on_delta=None) -> LLMReply:
         meter.check()
         self.calls.append(messages)
         if self._cycle:
@@ -132,6 +168,11 @@ class MockLLM(BaseLLM):
         else:
             text = self._replies[min(self._i, len(self._replies) - 1)]
         self._i += 1
+        if on_delta is not None:  # 模拟流式：分片回调累积文本（演示 mock 模式也能看到流式）
+            step = max(1, len(text) // 8)
+            for end in range(step, len(text) + step, step):
+                time.sleep(0.004)
+                on_delta(text[:end])
         # 与真实客户端的无 usage 兜底同源，保证预算熔断在离线路径同样可测
         prompt_tokens = estimate_tokens(str(m.get("content", "")) for m in messages)
         completion_tokens = max(1, estimate_tokens([text]))

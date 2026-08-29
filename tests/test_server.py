@@ -81,6 +81,15 @@ class TestAskStream:
     def test_question_validation(self, client):
         assert client.get("/api/ask", params={"question": ""}).status_code == 422
 
+    def test_answer_streams_as_deltas(self, client):
+        resp = client.get("/api/ask", params={"question": "流式测试：上海的客户数？"})
+        events = sse_events(resp.text)
+        deltas = [d["text"] for e, d in events if e == "delta"]
+        final = [d for e, d in events if e == "final"][0]
+        assert len(deltas) >= 2, "回答应以多个增量事件推送"
+        assert deltas[-1] == final["answer"]  # 增量累积文本与最终回答一致
+        assert deltas[0] != deltas[-1]
+
 
 class TestChartFiles:
     def test_path_traversal_rejected(self, client):
@@ -122,6 +131,16 @@ class TestThoughtInStream:
         events = sse_events(resp.text)
         gen = next(d for e, d in events if e == "node" and d["node"] == "generate_sql")
         assert gen.get("thought") == "思路。"
+
+
+class TestAllowedTablesApi:
+    def test_schema_endpoint_filtered(self, settings, db):
+        cfg = settings.model_copy(update={"allowed_tables": "customers, orders"})
+        llm = MockLLM(["思路。\n```sql\nSELECT COUNT(*) FROM customers\n```"], cycle=True)
+        app = create_app(agent=DeepQuery(cfg, db, llm), settings=cfg)
+        with TestClient(app) as c:
+            names = {t["name"] for t in c.get("/api/schema").json()["tables"]}
+        assert names == {"customers", "orders"}
 
 
 class TestAccessCode:
