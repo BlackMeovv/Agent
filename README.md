@@ -31,6 +31,33 @@
 每次跑分的完整 JSON 与对比报告在 [eval/results/](eval/results/)，
 失败案例逐条复盘（含根因验证与修复前后对比）见 [docs/badcases.md](docs/badcases.md)。
 
+## 界面
+
+对话流 + 回答逐字流式 + 运行过程检查器（步骤思路 / 生成的 SQL / 上下文注入明细），
+每个回答都能点开追溯到 SQL 与原始结果：
+
+![对话与运行过程](docs/assets/ui-run.png)
+
+<details><summary>更多截图：首页 / 暗色主题</summary>
+
+![首页](docs/assets/ui-home.png)
+
+![暗色主题](docs/assets/ui-dark.png)
+
+</details>
+
+## 技术栈
+
+| 层 | 选型 |
+|---|---|
+| Agent 编排 | LangGraph 状态机 + 手写 Reason-Act-Observe 修复内循环 |
+| SQL 安全 | sqlglot AST 守卫（单条 SELECT/表白名单/强制 LIMIT）；SQLite/MySQL/PostgreSQL 三引擎只读接入 |
+| 检索 | 自研 BM25（中文双字分词）+ 可选向量检索（任意 OpenAI 兼容 embeddings），RRF 融合选表 |
+| 服务 | FastAPI + SSE 逐字流式；Redis 结果缓存；Prometheus/Grafana 监控；Langfuse 链路追踪 |
+| 前端 | Vue 3 + Vite + Pinia，自研设计系统与组件（无 UI 库依赖，字体自托管） |
+| 评测 | 自研 evalkit：EX 判分（排序并列容差）、Wilson 95% CI、McNemar 配对检验、BIRD/Spider 适配 |
+| 工程 | uv / pytest（271 个离线用例）/ GitHub Actions CI / Docker 多阶段构建 |
+
 ## 快速开始
 
 ```bash
