@@ -166,6 +166,17 @@ class _ServerDatabase:
 
     _columns_schema_filter = ""  # 子类提供 information_schema 的库过滤条件
 
+    def schema_fingerprint(self) -> str:
+        """schema 版本指纹：对 information_schema 的表/列/类型清单做哈希。
+
+        一次毫秒级查询；表结构不变则指纹稳定，数据增删不影响。"""
+        import hashlib
+        import json
+
+        cols = self.table_columns()
+        payload = json.dumps(cols, ensure_ascii=False, sort_keys=True)
+        return f"{self.dialect}:{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
+
     def table_columns(self) -> dict[str, list[dict]]:
         rows = self._fetch_all(
             "SELECT table_name, column_name, data_type FROM information_schema.columns "

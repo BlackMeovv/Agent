@@ -196,3 +196,48 @@ class TestAllowedTables:
     def test_empty_config_means_all_tables(self, settings, db):
         agent, _ = make_agent(settings, db, [sql_reply(GOOD_SQL)])
         assert agent.allowed_tables == set(db.table_names())
+
+
+class TestSchemaRefresh:
+    """schema 指纹：建/改表后无需重启即被 Agent 看见。"""
+
+    def _mutable_agent(self, settings, tmp_path, replies):
+        import sqlite3
+
+        from deepquery.demo_data import build
+        from deepquery.tools.database import ReadOnlyDatabase
+
+        path = tmp_path / "mutable.sqlite"
+        build(path)
+        db = ReadOnlyDatabase(path, timeout_seconds=5, max_rows=200)
+        cfg = settings.model_copy(update={"db_path": str(path)})
+        agent, llm = make_agent(cfg, db, replies)
+        return agent, path, sqlite3
+
+    def test_new_table_visible_without_restart(self, settings, tmp_path):
+        agent, path, sqlite3 = self._mutable_agent(
+            settings, tmp_path, [sql_reply("SELECT COUNT(*) FROM refunds")]
+        )
+        assert "refunds" not in agent.allowed_tables
+        fp_before = agent.schema_fingerprint
+
+        rw = sqlite3.connect(path)
+        rw.execute("CREATE TABLE refunds (id INTEGER PRIMARY KEY, amount REAL)")
+        rw.execute("INSERT INTO refunds VALUES (1, 9.9)")
+        rw.commit()
+        rw.close()
+
+        outcome = agent.ask("退款总数？", generate_answer=False)
+        assert agent.schema_fingerprint != fp_before  # 指纹随 DDL 变化
+        assert "refunds" in agent.allowed_tables  # 新表已进白名单
+        assert "refunds" in agent.full_schema  # 且进入 schema 注入
+        assert outcome.status == "ok"  # 对新表的查询直接成功
+
+    def test_data_change_keeps_fingerprint(self, settings, tmp_path):
+        agent, path, sqlite3 = self._mutable_agent(settings, tmp_path, [sql_reply(GOOD_SQL)])
+        fp = agent.schema_fingerprint
+        rw = sqlite3.connect(path)
+        rw.execute("UPDATE customers SET city = '上海' WHERE id = 1")
+        rw.commit()
+        rw.close()
+        assert agent.maybe_refresh_schema() == fp  # 数据增删不触发重建

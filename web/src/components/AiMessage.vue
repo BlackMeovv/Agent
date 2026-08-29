@@ -117,7 +117,7 @@ function copyAnswer() {
 
     <div v-if="msg.status !== 'running'" class="foot">
       <span v-if="msg.answer" @click="copyAnswer">复制回答</span>
-      <span @click="store.ask(msg.q)">重跑</span>
+      <span title="强制重新执行，不走缓存" @click="store.ask(msg.q, true)">重跑</span>
     </div>
   </div>
 </template>

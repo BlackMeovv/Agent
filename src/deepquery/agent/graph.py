@@ -171,14 +171,8 @@ class DeepQuery:
         self.db = db
         self.llm = llm
         self.tracer = tracer or NOOP_TRACER
-        # 表级权限：白名单、schema 注入、RAG 语料同源过滤——模型看不见的表既不会
-        # 出现在 prompt 里，也过不了守卫（纵深的应用层；硬边界在 DB 只读账号）
-        self._allowed_tables = resolve_allowed_tables(settings, db)
-        self._table_docs = {
-            t: doc for t, doc in db.schema_by_table().items() if t in self._allowed_tables
-        }
-        self._full_schema = "\n\n".join(self._table_docs.values())
-        self._retriever = SchemaRetriever(self._table_docs, embedder=build_embedder(settings))
+        self._schema_fp: str = ""
+        self._load_schema()
         self._glossary = load_glossary(settings.glossary_path)
         self._examples = load_examples(settings.examples_path)
         self._sandbox = None  # 图表沙箱按需构建
@@ -193,6 +187,42 @@ class DeepQuery:
     def full_schema(self) -> str:
         """权限过滤后的全量 schema 文本。"""
         return self._full_schema
+
+    @property
+    def schema_fingerprint(self) -> str:
+        """当前已加载 schema 的版本指纹（服务端把它编入缓存 key）。"""
+        return self._schema_fp
+
+    def _load_schema(self) -> None:
+        """自省数据库并重建 schema 上下文。
+
+        表级权限：白名单、schema 注入、RAG 语料同源过滤——模型看不见的表既不会
+        出现在 prompt 里，也过不了守卫（纵深的应用层；硬边界在 DB 只读账号）。
+        """
+        fp = getattr(self.db, "schema_fingerprint", None)
+        self._schema_fp = fp() if callable(fp) else ""
+        self._allowed_tables = resolve_allowed_tables(self.settings, self.db)
+        self._table_docs = {
+            t: doc
+            for t, doc in self.db.schema_by_table().items()
+            if t in self._allowed_tables
+        }
+        self._full_schema = "\n\n".join(self._table_docs.values())
+        self._retriever = SchemaRetriever(
+            self._table_docs, embedder=build_embedder(self.settings)
+        )
+
+    def maybe_refresh_schema(self) -> str:
+        """指纹变了才重建（每次提问前调用）。
+
+        检查是一次微秒/毫秒级查询；建表/改表后无需重启服务即可被看见。
+        不支持指纹的引擎返回空串，保持「启动时加载一次」的旧行为。
+        """
+        fp = getattr(self.db, "schema_fingerprint", None)
+        current = fp() if callable(fp) else ""
+        if current != self._schema_fp:
+            self._load_schema()
+        return self._schema_fp
 
     def _build_schema_context(
         self, question: str, user_id: str = "default"
@@ -301,6 +331,7 @@ class DeepQuery:
     def _prepare_run(
         self, question: str, generate_answer: bool, generate_chart: bool, user_id: str = "default"
     ):
+        self.maybe_refresh_schema()  # 建/改表后无需重启即生效（CLI/MCP/服务共用此入口）
         meter = UsageMeter(
             price_input_per_m=self.settings.llm_price_input_per_m,
             price_output_per_m=self.settings.llm_price_output_per_m,

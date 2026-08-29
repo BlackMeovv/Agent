@@ -52,6 +52,20 @@ class ReadOnlyDatabase:
 
     # ---------- schema ----------
 
+    def schema_fingerprint(self) -> str:
+        """schema 版本指纹：任何 DDL（建/删/改表）都会使其变化，数据增删不会。
+
+        Agent 每次提问前比对指纹，变了才重建 schema 上下文——PRAGMA 一次
+        微秒级，重建（含样例行采样/检索索引）只在真正变更时发生。
+        """
+        conn = self._connect()
+        try:
+            conn.set_authorizer(None)  # PRAGMA 自省是自家代码路径，非模型输入
+            version = conn.execute("PRAGMA schema_version").fetchone()[0]
+        finally:
+            conn.close()
+        return f"sqlite:{version}"
+
     def table_names(self) -> list[str]:
         conn = self._connect()
         try:

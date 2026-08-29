@@ -81,6 +81,15 @@ class TestAskStream:
     def test_question_validation(self, client):
         assert client.get("/api/ask", params={"question": ""}).status_code == 422
 
+    def test_fresh_param_bypasses_cache(self, client):
+        params = {"question": "缓存旁路测试：上海的客户数？"}
+        client.get("/api/ask", params=params)
+        calls_before = len(client.agent_llm.calls)
+        resp = client.get("/api/ask", params={**params, "fresh": 1})
+        final = [d for e, d in sse_events(resp.text) if e == "final"][0]
+        assert final["cached"] is False  # 重跑：不读缓存真实执行
+        assert len(client.agent_llm.calls) > calls_before
+
     def test_answer_streams_as_deltas(self, client):
         resp = client.get("/api/ask", params={"question": "流式测试：上海的客户数？"})
         events = sse_events(resp.text)

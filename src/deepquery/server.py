@@ -177,6 +177,7 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
     @app.get("/api/schema")
     def api_schema():
         agent_ = get_agent()
+        agent_.maybe_refresh_schema()  # 新建/修改的表刷新页面即可见
         visible = agent_.allowed_tables  # 表级权限：前端库表树与 Agent 视野同源
         cols = agent_.db.table_columns()
         return {"tables": [{"name": t, "columns": c} for t, c in cols.items() if t in visible]}
@@ -234,6 +235,7 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
         question: str = Query(..., min_length=1, max_length=2000),
         chart: bool = Query(False),
         user: str = Query("default", max_length=64),
+        fresh: bool = Query(False),  # true=跳过缓存读取强制重跑（结果仍会写入缓存）
         code: str | None = Query(None, max_length=64),
     ):
         require_code(code)
@@ -243,11 +245,12 @@ def create_app(agent: DeepQuery | None = None, settings: Settings | None = None)
             db_path=settings.db_path,
             model=agent_.llm.model_name,
             chart=chart,
+            schema=agent_.maybe_refresh_schema(),
         )
 
         def stream():
             start = time.monotonic()
-            cached = cache.get(key)
+            cached = None if fresh else cache.get(key)
             if cached is not None:
                 CACHE_HITS.inc()
                 REQUESTS.labels(status=cached.get("status", "ok")).inc()

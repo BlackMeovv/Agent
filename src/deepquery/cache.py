@@ -17,9 +17,10 @@ if TYPE_CHECKING:
     from .config import Settings
 
 
-def cache_key(question: str, *, db_path: str, model: str, chart: bool) -> str:
+def cache_key(question: str, *, db_path: str, model: str, chart: bool, schema: str = "") -> str:
+    # schema 指纹入 key：建/改表后旧缓存整体作废（数据增删的时效性由 TTL 兜底）
     payload = json.dumps(
-        {"q": question.strip(), "db": db_path, "model": model, "chart": chart},
+        {"q": question.strip(), "db": db_path, "model": model, "chart": chart, "schema": schema},
         ensure_ascii=False,
         sort_keys=True,
     )

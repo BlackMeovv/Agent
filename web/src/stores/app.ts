@@ -188,7 +188,7 @@ export const useAppStore = defineStore("app", {
     },
 
     // ---- 提问主流程 ----
-    ask(question: string) {
+    ask(question: string, fresh = false) {
       const q = question.trim();
       if (!q || this.running) return;
 
@@ -255,7 +255,7 @@ export const useAppStore = defineStore("app", {
           this.stream = null;
           this.persist();
         },
-      });
+      }, "default", fresh);
     },
 
     stop() {

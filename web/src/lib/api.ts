@@ -118,10 +118,12 @@ export function askStream(
   chart: boolean,
   callbacks: AskCallbacks,
   user = "default",
+  fresh = false,
 ): EventSource {
   const url =
     `/api/ask?question=${encodeURIComponent(question)}` +
-    `&chart=${chart ? 1 : 0}&user=${encodeURIComponent(user)}${codeQS()}`;
+    `&chart=${chart ? 1 : 0}&user=${encodeURIComponent(user)}` +
+    `${fresh ? "&fresh=1" : ""}${codeQS()}`;
   const es = new EventSource(url);
   es.addEventListener("node", (e) => callbacks.onNode(JSON.parse((e as MessageEvent).data)));
   es.addEventListener("delta", (e) => callbacks.onDelta?.(JSON.parse((e as MessageEvent).data).text));
