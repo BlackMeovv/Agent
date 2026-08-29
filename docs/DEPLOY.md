@@ -12,8 +12,8 @@
 ## 1. 拉代码
 
 ```bash
-git clone https://github.com/BlackMeovv/Agent.git
-cd Agent
+git clone https://github.com/BlackMeovv/DeepQuery.git
+cd DeepQuery
 ```
 
 ## 2. 配置 .env
