@@ -45,9 +45,9 @@ uv run python -m deepquery.evalkit.report <baseline.json> <optimized.json> --mcn
 ```
 
 输出 markdown 表：每行一个配置，EX 带置信区间 + 成本 + 延迟。
-McNemar 检验回答"这次提升是真的还是抖动"——面试聊到这里就赢了。
+McNemar 检验回答"这次提升是真的还是抖动"。
 
 ## 约定
 
-- 调 prompt / 检索只看 dev 子集；最终简历数字用另抽的 held-out 子集复核（换个 seed 再 prepare 一份，标记为 holdout，平时绝不跑）。
+- 调 prompt / 检索只看 dev 子集；最终对外报告的数字用另抽的 held-out 子集复核（换个 seed 再 prepare 一份，标记为 holdout，平时绝不跑）。
 - 报告 JSON 全部留档在 `eval/results/`（已 gitignore，重要结果手动挑进 git 或写进 report.md）。

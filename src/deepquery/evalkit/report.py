@@ -4,7 +4,7 @@
         --out eval/results/report.md
     python -m deepquery.evalkit.report a.json b.json --mcnemar   # 对前两个做配对检验
 
-这张表就是简历上"消融实验"的原始材料：每行一个配置，
+这张表就是消融实验结论的原始材料：每行一个配置，
 EX 带 95% 置信区间，成本与延迟并列——优化是否值得一目了然。
 """
 

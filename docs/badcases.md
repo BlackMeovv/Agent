@@ -2,7 +2,7 @@
 
 > 记录纪律：每次评测跑完，把未通过的 case 按失败模式归类记在这里；
 > 每类给出根因 → 对策 → 修复后的前后对比。这份文档是消融表之外最有说服力的
-> 面试素材（"error analysis 是一切的地基" — Hamel Husain）。
+> 质量证据（"error analysis 是一切的地基" — Hamel Husain）。
 > 例句库（eval/knowledge/examples.jsonl）里的 few-shot 只能从这里的人工修正产生。
 
 ## 失败模式分类

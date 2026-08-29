@@ -8,7 +8,7 @@
 - **Vue 3 + Vite + TypeScript + Pinia**（组合式 API）
 - 组件库二选一：
   - **Arco Design Vue**（字节开源）——本身就是内部数据平台风格，与后端现用的 #165dff 主色一致，最贴合"生产工具"观感
-  - **Element Plus**——国内使用最广，写进简历辨识度高
+  - **Element Plus**——国内使用最广、生态最成熟
 - SQL 高亮：`shiki` 或 `highlight.js`；图表（可选进阶）：`echarts` 直接在前端渲染查询结果
 - **不需要任何 SSE 库**：原生 `EventSource` 即可（参考内置页的实现）
 

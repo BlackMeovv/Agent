@@ -1,7 +1,7 @@
 # 服务器部署指南（在线 Demo）
 
-目标：把 DeepQuery 部署到你自己的服务器上，简历里放一个链接 + 访问口令，
-面试官/HR 打开就能真实提问。全程约 10 分钟。
+目标：把 DeepQuery 部署到自己的服务器上，对外只需一个链接 + 访问口令，
+访客打开就能真实提问。全程约 10 分钟。
 
 ## 0. 前提
 
@@ -29,7 +29,7 @@ vim .env
 LLM_API_KEY=你的key
 LLM_BASE_URL=你的中转地址/v1
 LLM_MODEL=模型名
-DEMO_ACCESS_CODE=给面试官的访问口令
+DEMO_ACCESS_CODE=给访客的访问口令
 ```
 
 公网演示建议：
@@ -65,7 +65,7 @@ curl http://localhost:8000/healthz
 
 ## 4. 域名 + HTTPS（可选，更体面）
 
-有域名的话加一层 nginx 反代，简历上的链接就是 `https://dq.你的域名`：
+有域名的话加一层 nginx 反代，对外的链接就是 `https://dq.你的域名`：
 
 ```nginx
 server {
@@ -95,7 +95,7 @@ docker compose down
 依次是：看日志、更新代码后重建、整体下线。数据（演示库/记忆/图表）在
 named volume `app-data` 里，重建不丢。
 
-## 6. 安全边界（面试可讲）
+## 6. 安全边界
 
 - 数据库三重只读 + AST 守卫，演示库随时可由 `deepquery.demo_data` 重新生成，
   没有可损毁的东西

@@ -27,3 +27,6 @@ web/dist/
 .idea/
 .vscode/
 .DS_Store
+
+# 本地私有笔记（求职材料等），永不入库
+docs/private/

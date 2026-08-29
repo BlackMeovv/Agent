@@ -11,7 +11,7 @@
         --db-root /path/to/bird_dev --repeats 3 --label baseline
 
 数据下载见 docs/benchmarks.md。抽样固定 seed，保证子集可复现——
-评测数字必须可复现，否则面试一问就穿。
+评测数字必须可复现，否则毫无说服力。
 """
 
 from __future__ import annotations

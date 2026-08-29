@@ -83,8 +83,8 @@ deepquery ask "上海的客户一共有多少个？" --db mysql://readonly:reado
 
 ## 前端（Vue3）
 
-`web/` 是正式前端：Vue 3 + Vite + Pinia，按 Claude 风格设计稿实现（对话流 + 运行过程检查器 +
-库表结构/记忆/历史侧栏，亮/暗主题）。
+`web/` 是正式前端：Vue 3 + Vite + Pinia，Organic 暖色设计（对话流 + 回答逐字流式 +
+运行过程检查器 + 库表结构/记忆/历史侧栏，亮/暗主题，字体自托管不依赖外网）。
 
 ```bash
 cd web && npm install
@@ -109,7 +109,7 @@ locust -f eval/load/locustfile.py --host http://localhost:8000
 不配置 API 也可以完整验证工程链路：
 
 ```bash
-make test        # 116 个离线测试：守卫/只读层/评测打分/图编排（MockLLM）
+make test        # 271 个离线测试：守卫/只读层/评测打分/图编排/服务端（MockLLM）
 make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 ```
 
@@ -138,17 +138,9 @@ make smoke-gold  # 评测基建自检：gold SQL 离线回放，必须 20/20
 成本、延迟）都能在 Langfuse 网页上图形化查看，不需要自己写任何前端。
 未配置时追踪完全关闭，零开销。
 
-## 项目文档
+## 文档
 
-- [调研报告](docs/research.md)：为什么做这个方向（岗位 JD / 技术趋势 / 面试考察点调研）
-- [项目方案](docs/plan.md)：架构设计、里程碑、评测方案
-
-## Roadmap
-
-- [x] Week 1：最小闭环（生成 → 守卫 → 执行 → 自纠错）+ 冒烟评测集 + 离线测试
-- [x] Week 2：BIRD/Spider 基准接入、Langfuse 追踪、Wilson 置信区间 + McNemar 检验、消融对比报告
-- [x] Week 3：Schema RAG（BM25+向量混合检索选表 + 选表召回率指标）、业务字典/few-shot 例句注入、按错误类型的修复提示、防幻觉数字校验
-- [x] Week 4：图表沙箱（Docker/子进程双执行器 + 静态拒绝清单）、FastAPI + SSE 流式服务与演示网页、docker compose 一键部署
-- [x] Week 5+：MCP server、跨会话记忆、236 条自建业务评测集（dev/holdout）、Redis 结果缓存、Prometheus/Grafana 大盘、locust 压测脚本、MySQL/Postgres 只读接入（方言提示线程化）
-- [x] 真实模型基线与迭代：业务集 93.3%→97.8%（holdout 97.7% 复核）、BIRD 64.7% + RAG 消融驱动检索策略修正
-- [ ] 待办：多模型横评、在线 Demo 部署（访问口令）、demo GIF
+- [部署指南](docs/DEPLOY.md)：服务器部署（docker compose、nginx SSE 反代、访问口令、安全边界）
+- [评测基准](docs/benchmarks.md)：BIRD/Spider 接入方法与统计口径
+- [失败案例复盘](docs/badcases.md)：逐条根因验证与修复前后对比
+- [前端契约](docs/frontend-spec.md)：SSE 事件与 API 约定
